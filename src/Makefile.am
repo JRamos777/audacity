@@ -391,6 +391,8 @@ audacity_SOURCES = \
 	effects/Wahwah.h \
 	export/Export.cpp \
 	export/Export.h \
+	export/ExportDSPADPCM.cpp \
+	export/ExportDSPADPCM.h \
 	export/ExportCL.cpp \
 	export/ExportCL.h \
 	export/ExportFLAC.cpp \

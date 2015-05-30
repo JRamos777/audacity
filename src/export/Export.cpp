@@ -50,6 +50,7 @@
 
 #include "Export.h"
 #include "ExportPCM.h"
+#include "ExportDSPADPCM.h"
 #include "ExportMP3.h"
 #include "ExportOGG.h"
 #include "ExportFLAC.h"
@@ -290,6 +291,7 @@ Exporter::Exporter()
    SetFileDialogTitle( _("Export Audio") );
 
    RegisterPlugin(New_ExportPCM());
+   RegisterPlugin(New_ExportDSPADPCM());
    RegisterPlugin(New_ExportMP3());
 
 #ifdef USE_LIBVORBIS
