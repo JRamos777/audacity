@@ -395,6 +395,7 @@ am__audacity_SOURCES_DIST = BlockFile.cpp BlockFile.h DirManager.cpp \
 	export/ExportMultiple.cpp export/ExportMultiple.h \
 	export/ExportOGG.cpp export/ExportOGG.h export/ExportPCM.cpp \
 	export/ExportPCM.h import/Import.cpp import/Import.h \
+	import/ImportDSPADPCM.cpp import/ImportDSPADPCM.h \
 	import/ImportFLAC.cpp import/ImportFLAC.h import/ImportLOF.cpp \
 	import/ImportLOF.h import/ImportMP3.cpp import/ImportMP3.h \
 	import/ImportOGG.cpp import/ImportOGG.h import/ImportPCM.cpp \
@@ -641,6 +642,7 @@ am_audacity_OBJECTS = $(am__objects_1) audacity-AboutDialog.$(OBJEXT) \
 	export/audacity-ExportOGG.$(OBJEXT) \
 	export/audacity-ExportPCM.$(OBJEXT) \
 	import/audacity-Import.$(OBJEXT) \
+	import/audacity-ImportDSPADPCM.$(OBJEXT) \
 	import/audacity-ImportFLAC.$(OBJEXT) \
 	import/audacity-ImportLOF.$(OBJEXT) \
 	import/audacity-ImportMP3.$(OBJEXT) \
@@ -1261,6 +1263,7 @@ audacity_SOURCES = $(libaudacity_la_SOURCES) AboutDialog.cpp \
 	export/ExportMultiple.cpp export/ExportMultiple.h \
 	export/ExportOGG.cpp export/ExportOGG.h export/ExportPCM.cpp \
 	export/ExportPCM.h import/Import.cpp import/Import.h \
+	import/ImportDSPADPCM.cpp import/ImportDSPADPCM.h \
 	import/ImportFLAC.cpp import/ImportFLAC.h import/ImportLOF.cpp \
 	import/ImportLOF.h import/ImportMP3.cpp import/ImportMP3.h \
 	import/ImportOGG.cpp import/ImportOGG.h import/ImportPCM.cpp \
@@ -1695,6 +1698,8 @@ import/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) import/$(DEPDIR)
 	@: > import/$(DEPDIR)/$(am__dirstamp)
 import/audacity-Import.$(OBJEXT): import/$(am__dirstamp) \
+	import/$(DEPDIR)/$(am__dirstamp)
+import/audacity-ImportDSPADPCM.$(OBJEXT): import/$(am__dirstamp) \
 	import/$(DEPDIR)/$(am__dirstamp)
 import/audacity-ImportFLAC.$(OBJEXT): import/$(am__dirstamp) \
 	import/$(DEPDIR)/$(am__dirstamp)
@@ -2165,6 +2170,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@export/$(DEPDIR)/audacity-ExportPCM.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@import/$(DEPDIR)/audacity-FormatClassifier.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@import/$(DEPDIR)/audacity-Import.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@import/$(DEPDIR)/audacity-ImportDSPADPCM.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@import/$(DEPDIR)/audacity-ImportFFmpeg.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@import/$(DEPDIR)/audacity-ImportFLAC.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@import/$(DEPDIR)/audacity-ImportGStreamer.Po@am__quote@
@@ -4746,6 +4752,20 @@ import/audacity-Import.obj: import/Import.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='import/Import.cpp' object='import/audacity-Import.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(audacity_CPPFLAGS) $(CPPFLAGS) $(audacity_CXXFLAGS) $(CXXFLAGS) -c -o import/audacity-Import.obj `if test -f 'import/Import.cpp'; then $(CYGPATH_W) 'import/Import.cpp'; else $(CYGPATH_W) '$(srcdir)/import/Import.cpp'; fi`
+
+import/audacity-ImportDSPADPCM.o: import/ImportDSPADPCM.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(audacity_CPPFLAGS) $(CPPFLAGS) $(audacity_CXXFLAGS) $(CXXFLAGS) -MT import/audacity-ImportDSPADPCM.o -MD -MP -MF import/$(DEPDIR)/audacity-ImportDSPADPCM.Tpo -c -o import/audacity-ImportDSPADPCM.o `test -f 'import/ImportDSPADPCM.cpp' || echo '$(srcdir)/'`import/ImportDSPADPCM.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) import/$(DEPDIR)/audacity-ImportDSPADPCM.Tpo import/$(DEPDIR)/audacity-ImportDSPADPCM.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='import/ImportDSPADPCM.cpp' object='import/audacity-ImportDSPADPCM.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(audacity_CPPFLAGS) $(CPPFLAGS) $(audacity_CXXFLAGS) $(CXXFLAGS) -c -o import/audacity-ImportDSPADPCM.o `test -f 'import/ImportDSPADPCM.cpp' || echo '$(srcdir)/'`import/ImportDSPADPCM.cpp
+
+import/audacity-ImportDSPADPCM.obj: import/ImportDSPADPCM.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(audacity_CPPFLAGS) $(CPPFLAGS) $(audacity_CXXFLAGS) $(CXXFLAGS) -MT import/audacity-ImportDSPADPCM.obj -MD -MP -MF import/$(DEPDIR)/audacity-ImportDSPADPCM.Tpo -c -o import/audacity-ImportDSPADPCM.obj `if test -f 'import/ImportDSPADPCM.cpp'; then $(CYGPATH_W) 'import/ImportDSPADPCM.cpp'; else $(CYGPATH_W) '$(srcdir)/import/ImportDSPADPCM.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) import/$(DEPDIR)/audacity-ImportDSPADPCM.Tpo import/$(DEPDIR)/audacity-ImportDSPADPCM.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='import/ImportDSPADPCM.cpp' object='import/audacity-ImportDSPADPCM.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(audacity_CPPFLAGS) $(CPPFLAGS) $(audacity_CXXFLAGS) $(CXXFLAGS) -c -o import/audacity-ImportDSPADPCM.obj `if test -f 'import/ImportDSPADPCM.cpp'; then $(CYGPATH_W) 'import/ImportDSPADPCM.cpp'; else $(CYGPATH_W) '$(srcdir)/import/ImportDSPADPCM.cpp'; fi`
 
 import/audacity-ImportFLAC.o: import/ImportFLAC.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(audacity_CPPFLAGS) $(CPPFLAGS) $(audacity_CXXFLAGS) $(CXXFLAGS) -MT import/audacity-ImportFLAC.o -MD -MP -MF import/$(DEPDIR)/audacity-ImportFLAC.Tpo -c -o import/audacity-ImportFLAC.o `test -f 'import/ImportFLAC.cpp' || echo '$(srcdir)/'`import/ImportFLAC.cpp

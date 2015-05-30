@@ -51,7 +51,7 @@ static inline uint32_t bswapu32(uint32_t val)
 #endif
 }
 
-static inline uint16_t bswapu16(uint16_t val)
+static inline int16_t bswap16(int16_t val)
 {
 #if __GNUC__
     return __builtin_bswap16(val);
@@ -771,9 +771,34 @@ int ExportDSPADPCM::Export(AudacityProject *project,
     sampleCount numSamples = mixer->Process(sampleFrames);
     unsigned int packetCount = (numSamples+13) / 14;
 
+    /* See if project contains loop region */
+    TrackListOfKindIterator labelIt(Track::Label);
+    const LabelTrack* labelTrack = (LabelTrack*)labelIt.First(tracks);
+    bool loops = false;
+    uint32_t loop_start = 0;
+    uint32_t loop_end = 0;
+    do
+    {
+        for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
+        {
+            const LabelStruct* label = labelTrack->GetLabel(l);
+            if (!label->title.CmpNoCase(wxT("loop")))
+            {
+                double nibblesPerSec = sampleRate * 16 / 14.0;
+                loops = true;
+                loop_start = label->getT0() * nibblesPerSec;
+                loop_end = label->getT1() * nibblesPerSec;
+                break;
+            }
+        }
+        if (loops)
+            break;
+    } while ((labelTrack = (LabelTrack*)labelIt.Next()));
+
     if (numSamples <= 2)
         goto done;
 
+    /* Encode samples */
     for (int c=0 ; c<numChannels ; ++c)
     {
         short* mixed = (short*)mixer->GetBuffer(c);
@@ -784,10 +809,13 @@ int ExportDSPADPCM::Export(AudacityProject *project,
         header.num_samples = bswapu32(numSamples-2);
         header.num_nibbles = bswapu32(packetCount*16);
         header.sample_rate = bswapu32(sampleRate);
+        header.loop_flag = bswap16((int16_t)loops);
+        header.loop_start = bswapu32(loop_start);
+        header.loop_end = bswapu32(loop_end);
         for (int i=0 ; i<16 ; ++i)
-            header.coef[i] = bswapu16(coefs[i]);
-        header.hist1 = bswapu16(mixed[0]);
-        header.hist2 = bswapu16(mixed[1]);
+            header.coef[i] = bswap16(coefs[i]);
+        header.hist1 = bswap16(mixed[0]);
+        header.hist2 = bswap16(mixed[1]);
         f[c].Write(&header, sizeof(header));
 
         short convSamps[16] = {mixed[0], mixed[1]};
@@ -812,9 +840,12 @@ int ExportDSPADPCM::Export(AudacityProject *project,
 
             f[c].Write(block, 8);
             writtenSamples += 14;
-            if (!(p%48))
-                progress->Update(writtenSamples, numSamples);
+            if (!(p%1024))
+                if ((updateResult = progress->Update(writtenSamples, numSamples)) != eProgressSuccess)
+                    break;
         }
+        if (updateResult != eProgressSuccess)
+            break;
     }
 
 done:

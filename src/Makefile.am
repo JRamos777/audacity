@@ -409,6 +409,8 @@ audacity_SOURCES = \
 	export/ExportPCM.h \
 	import/Import.cpp \
 	import/Import.h \
+	import/ImportDSPADPCM.cpp \
+	import/ImportDSPADPCM.h \
 	import/ImportFLAC.cpp \
 	import/ImportFLAC.h \
 	import/ImportLOF.cpp \

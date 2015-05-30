@@ -36,7 +36,7 @@
 #define AUDACITY_MODLEVEL  0
 
 #if IS_ALPHA
-   #define AUDACITY_SUFFIX wxT("-alpha-") __TDATE__
+   #define AUDACITY_SUFFIX wxT("-gc-dspadpcm-") __TDATE__
 #else
    #define AUDACITY_SUFFIX    wxT("") // for a stable release
 #endif
