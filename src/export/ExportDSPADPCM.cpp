@@ -376,8 +376,7 @@ static void FilterRecords(tvec vecBest[8], int exp, tvec records[], int recordCo
     }
 }
 
-static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut,
-                              ProgressDialog* progress)
+static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut)
 {
     int numBlocks = (samples + 13) / 14;
     int blockSamples;
@@ -440,7 +439,6 @@ static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut,
                 }
             }
         }
-        progress->Update(samples-x, samples*2);
     }
 
     vec1[0] = 1.0;
@@ -716,11 +714,11 @@ int ExportDSPADPCM::Export(AudacityProject *project,
     wxFile f[2];   // will be closed when it goes out of scope
     if (numChannels > 1)
     {
-        std::string fileName;
+        wxString fileName;
         std::size_t dotPos;
 
-        fileName = fName.ToStdString();
-        dotPos = fileName.rfind(".");
+        fileName = fName;
+        dotPos = fileName.rfind('.');
         if (dotPos > 0)
             fileName.insert(dotPos, 1, 'L');
         else
@@ -731,8 +729,8 @@ int ExportDSPADPCM::Export(AudacityProject *project,
             return false;
         }
 
-        fileName = fName.ToStdString();
-        dotPos = fileName.rfind(".");
+        fileName = fName;
+        dotPos = fileName.rfind('.');
         if (dotPos > 0)
             fileName.insert(dotPos, 1, 'R');
         else
@@ -780,7 +778,7 @@ int ExportDSPADPCM::Export(AudacityProject *project,
     {
         short* mixed = (short*)mixer->GetBuffer(c);
         short coefs[16];
-        DSPCorrelateCoefs(mixed, numSamples, coefs, progress);
+        DSPCorrelateCoefs(mixed, numSamples, coefs);
 
         struct dspadpcm_header header = {};
         header.num_samples = bswapu32(numSamples-2);
@@ -815,7 +813,7 @@ int ExportDSPADPCM::Export(AudacityProject *project,
             f[c].Write(block, 8);
             writtenSamples += 14;
             if (!(p%48))
-                progress->Update(numSamples + writtenSamples, numSamples * 2);
+                progress->Update(writtenSamples, numSamples);
         }
     }
 
