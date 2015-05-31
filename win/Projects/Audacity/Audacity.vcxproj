@@ -253,6 +253,7 @@
     <ClCompile Include="..\..\..\src\effects\NoiseReduction.cpp" />
     <ClCompile Include="..\..\..\src\effects\Phaser.cpp" />
     <ClCompile Include="..\..\..\src\Envelope.cpp" />
+    <ClCompile Include="..\..\..\src\export\ExportDSPADPCM.cpp" />
     <ClCompile Include="..\..\..\src\FFmpeg.cpp" />
     <ClCompile Include="..\..\..\src\FFT.cpp" />
     <ClCompile Include="..\..\..\src\FileFormats.cpp" />
@@ -263,6 +264,7 @@
     <ClCompile Include="..\..\..\src\HistoryWindow.cpp" />
     <ClCompile Include="..\..\..\src\ImageManipulation.cpp" />
     <ClCompile Include="..\..\..\src\import\FormatClassifier.cpp" />
+    <ClCompile Include="..\..\..\src\import\ImportDSPADPCM.cpp" />
     <ClCompile Include="..\..\..\src\import\ImportGStreamer.cpp" />
     <ClCompile Include="..\..\..\src\import\MultiFormatReader.cpp" />
     <ClCompile Include="..\..\..\src\import\SpecPowerMeter.cpp" />
@@ -527,7 +529,9 @@
     <ClInclude Include="..\..\..\src\effects\EffectRack.h" />
     <ClInclude Include="..\..\..\src\effects\NoiseReduction.h" />
     <ClInclude Include="..\..\..\src\effects\Phaser.h" />
+    <ClInclude Include="..\..\..\src\export\ExportDSPADPCM.h" />
     <ClInclude Include="..\..\..\src\import\FormatClassifier.h" />
+    <ClInclude Include="..\..\..\src\import\ImportDSPADPCM.h" />
     <ClInclude Include="..\..\..\src\import\ImportGStreamer.h" />
     <ClInclude Include="..\..\..\src\import\MultiFormatReader.h" />
     <ClInclude Include="..\..\..\src\import\SpecPowerMeter.h" />

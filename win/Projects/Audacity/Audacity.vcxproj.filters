@@ -840,6 +840,12 @@
     <ClCompile Include="..\..\..\src\ViewInfo.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\export\ExportDSPADPCM.cpp">
+      <Filter>src/export</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\import\ImportDSPADPCM.cpp">
+      <Filter>src/import</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\AboutDialog.h">
@@ -1678,6 +1684,12 @@
     </ClInclude>
     <ClInclude Include="..\..\..\src\AudacityHeaders.h">
       <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\export\ExportDSPADPCM.h">
+      <Filter>src/export</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\import\ImportDSPADPCM.h">
+      <Filter>src/import</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

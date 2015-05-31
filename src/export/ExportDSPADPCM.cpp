@@ -77,8 +77,8 @@ struct dspadpcm_header
     uint32_t sample_rate;
     uint16_t loop_flag;
     uint16_t format; /* 0 for ADPCM */
-    uint32_t loop_start;
-    uint32_t loop_end;
+    uint32_t loop_start_nibble;
+    uint32_t loop_end_nibble;
     uint32_t zero;
     int16_t coef[16];
     int16_t gain;
@@ -775,8 +775,9 @@ int ExportDSPADPCM::Export(AudacityProject *project,
     TrackListOfKindIterator labelIt(Track::Label);
     const LabelTrack* labelTrack = (LabelTrack*)labelIt.First(tracks);
     bool loops = false;
-    uint32_t loop_start = 0;
-    uint32_t loop_end = 0;
+    uint32_t loop_start_sample = 0;
+    uint32_t loop_start_nibble = 0;
+    uint32_t loop_end_nibble = 0;
     do
     {
         for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
@@ -786,14 +787,18 @@ int ExportDSPADPCM::Export(AudacityProject *project,
             {
                 double nibblesPerSec = sampleRate * 16 / 14.0;
                 loops = true;
-                loop_start = label->getT0() * nibblesPerSec;
-                loop_end = label->getT1() * nibblesPerSec;
+                loop_start_sample = label->getT0() * sampleRate;
+                loop_start_nibble = label->getT0() * nibblesPerSec;
+                loop_end_nibble = label->getT1() * nibblesPerSec;
                 break;
             }
         }
         if (loops)
             break;
     } while ((labelTrack = (LabelTrack*)labelIt.Next()));
+
+    bool loop_hist_added[2][2] = {{false, false}, {false, false}};
+    int16_t loop_hist[2][2];
 
     if (numSamples <= 2)
         goto done;
@@ -810,8 +815,8 @@ int ExportDSPADPCM::Export(AudacityProject *project,
         header.num_nibbles = bswapu32(packetCount*16);
         header.sample_rate = bswapu32(sampleRate);
         header.loop_flag = bswap16((int16_t)loops);
-        header.loop_start = bswapu32(loop_start);
-        header.loop_end = bswapu32(loop_end);
+        header.loop_start_nibble = bswapu32(loop_start_nibble);
+        header.loop_end_nibble = bswapu32(loop_end_nibble);
         for (int i=0 ; i<16 ; ++i)
             header.coef[i] = bswap16(coefs[i]);
         header.hist1 = bswap16(mixed[0]);
@@ -835,6 +840,22 @@ int ExportDSPADPCM::Export(AudacityProject *project,
 
             DSPEncodeChunk(convSamps, MIN(14, packetCount * 14 - writtenSamples), block, coefs);
 
+            /* Resolve loop sample */
+            if (!loop_hist_added[c][0] && 
+                writtenSamples <= loop_start_sample - 1 &&
+                writtenSamples + 14 > loop_start_sample - 1)
+            {
+                loop_hist_added[c][0] = true;
+                loop_hist[c][0] = convSamps[loop_start_sample-writtenSamples-1];
+            }
+            if (!loop_hist_added[c][1] &&
+                writtenSamples <= loop_start_sample - 2 &&
+                writtenSamples + 14 > loop_start_sample - 2)
+            {
+                loop_hist_added[c][1] = true;
+                loop_hist[c][1] = convSamps[loop_start_sample-writtenSamples-2];
+            }
+
             convSamps[0] = convSamps[14];
             convSamps[1] = convSamps[15];
 
@@ -846,6 +867,22 @@ int ExportDSPADPCM::Export(AudacityProject *project,
         }
         if (updateResult != eProgressSuccess)
             break;
+    }
+
+    if (loop_hist_added[0][0] && loop_hist_added[0][1])
+    {
+        loop_hist[0][0] = bswap16(loop_hist[0][0]);
+        loop_hist[0][1] = bswap16(loop_hist[0][1]);
+        f[0].Seek(offsetof(struct dspadpcm_header, loop_hist1));
+        f[0].Write(loop_hist[0], 4);
+    }
+
+    if (loop_hist_added[1][0] && loop_hist_added[1][1])
+    {
+        loop_hist[1][0] = bswap16(loop_hist[1][0]);
+        loop_hist[1][1] = bswap16(loop_hist[1][1]);
+        f[1].Seek(offsetof(struct dspadpcm_header, loop_hist1));
+        f[1].Write(loop_hist[1], 4);
     }
 
 done:
