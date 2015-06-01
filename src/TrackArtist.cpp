@@ -438,6 +438,12 @@ void TrackArtist::DrawTrack(const Track * t,
       case WaveTrack::SpectrumLogDisplay:
          DrawSpectrum(wt, dc, r, viewInfo, false, true);
          break;
+      case WaveTrack::SpectralSelectionDisplay:
+         DrawSpectrum(wt, dc, r, viewInfo, false, false);
+         break;
+      case WaveTrack::SpectralSelectionLogDisplay:
+         DrawSpectrum(wt, dc, r, viewInfo, false, true);
+         break;
       case WaveTrack::PitchDisplay:
          DrawSpectrum(wt, dc, r, viewInfo, true, false);
          break;
@@ -763,7 +769,10 @@ void TrackArtist::UpdateVRuler(Track *t, wxRect & r)
          vruler->SetLabelEdges(true);
          vruler->SetLog(false);
       }
-      else if (display == WaveTrack::SpectrumDisplay) {
+      else if ( 
+         (display == WaveTrack::SpectrumDisplay) || 
+         (display == WaveTrack::SpectralSelectionDisplay) )
+      {
          // Spectrum
 
          if (r.height < 60)
@@ -806,7 +815,10 @@ void TrackArtist::UpdateVRuler(Track *t, wxRect & r)
          }
          vruler->SetLog(false);
       }
-      else if (display == WaveTrack::SpectrumLogDisplay) {
+      else if ( 
+         (display == WaveTrack::SpectrumLogDisplay) || 
+         (display == WaveTrack::SpectralSelectionLogDisplay) )
+      {
          // SpectrumLog
 
          if (r.height < 10)
@@ -1791,24 +1803,24 @@ static float sumFreqValues(
 
 // Helper function to decide on which color set to use.
 // dashCount counts both dashes and the spaces between them. 
+inline
 AColor::ColorGradientChoice ChooseColorSet( float bin0, float bin1, float selBinLo, 
-   float selBinCenter, float selBinHi, int dashCount )
+   float selBinCenter, float selBinHi, int dashCount, bool isSpectral )
 {
-   if ( (selBinCenter >= 0) && (bin0 <= selBinCenter) && (selBinCenter < bin1) )
+   if (!isSpectral)
+      return  AColor::ColorGradientTimeSelected;
+   if ((selBinCenter >= 0) && (bin0 <= selBinCenter) &&
+       (selBinCenter < bin1))
       return AColor::ColorGradientEdge;
-   else if (
-      (0 == dashCount % 2)    &&
-      (((selBinLo >= 0) && (bin0 <= selBinLo) && ( selBinLo < bin1))  ||
-       ((selBinHi >= 0) && (bin0 <= selBinHi) && ( selBinHi < bin1)) ) )
+   if ((0 == dashCount % 2) &&
+       (((selBinLo >= 0) && (bin0 <= selBinLo) && ( selBinLo < bin1))  ||
+        ((selBinHi >= 0) && (bin0 <= selBinHi) && ( selBinHi < bin1))))
       return AColor::ColorGradientEdge;
-   else if (
-      (selBinLo < 0 || selBinLo < bin1) && 
-      (selBinHi < 0 || selBinHi > bin0) )
+   if ((selBinLo < 0 || selBinLo < bin1) && (selBinHi < 0 || selBinHi > bin0))
       return  AColor::ColorGradientTimeAndFrequencySelected;
-   else
+
       return  AColor::ColorGradientTimeSelected;
 }
-
 
 
 void TrackArtist::DrawClipSpectrum(WaveTrackCache &cache,
@@ -1948,8 +1960,8 @@ void TrackArtist::DrawClipSpectrum(WaveTrackCache &cache,
    if (!image)return;
    unsigned char *data = image->GetData();
 
-   int windowSize = GetSpectrumWindowSize();
-   int half = windowSize/2;
+   int windowSize = GetSpectrumWindowSize(!autocorrelation);
+   const int half = windowSize / 2;
    float *freq = new float[mid.width * half];
    sampleCount *where = new sampleCount[mid.width+1];
 
@@ -2095,10 +2107,12 @@ void TrackArtist::DrawClipSpectrum(WaveTrackCache &cache,
 
             AColor::ColorGradientChoice selected =
                AColor::ColorGradientUnselected;
-            // If we are in the time selected range, then we may use a differnt color set.
+            // If we are in the time selected range, then we may use a different color set.
             if (ssel0 <= w0 && w1 < ssel1)
             {
-               selected = ChooseColorSet( bin0, bin1, selBinLo, selBinCenter, selBinHi, x/DASH_LENGTH );
+               bool isSpectral = ((track->GetDisplay() == WaveTrack::SpectralSelectionDisplay) ||
+                                  (track->GetDisplay() == WaveTrack::SpectralSelectionLogDisplay));
+               selected = ChooseColorSet( bin0, bin1, selBinLo, selBinCenter, selBinHi, x/DASH_LENGTH, isSpectral );
             }
 
 
@@ -2207,10 +2221,12 @@ void TrackArtist::DrawClipSpectrum(WaveTrackCache &cache,
 
             AColor::ColorGradientChoice selected =
                AColor::ColorGradientUnselected;
-            // If we are in the time selected range, then we may use a differnt color set.
+            // If we are in the time selected range, then we may use a different color set.
             if (ssel0 <= w0 && w1 < ssel1)
             {
-               selected = ChooseColorSet( bin0, bin1, selBinLo, selBinCenter, selBinHi, x/DASH_LENGTH );
+               bool isSpectral = ((track->GetDisplay() == WaveTrack::SpectralSelectionDisplay) ||
+                                  (track->GetDisplay() == WaveTrack::SpectralSelectionLogDisplay));
+               selected = ChooseColorSet( bin0, bin1, selBinLo, selBinCenter, selBinHi, x/DASH_LENGTH, isSpectral );
             }
 
             if(!usePxCache) {
@@ -3014,6 +3030,9 @@ void TrackArtist::UpdatePrefs()
       mLogMinFreq = 1;
 
    mWindowSize = gPrefs->Read(wxT("/Spectrum/FFTSize"), 256);
+#ifdef EXPERIMENTAL_ZERO_PADDED_SPECTROGRAMS
+   mZeroPaddingFactor = gPrefs->Read(wxT("/Spectrum/ZeroPaddingFactor"), 1);
+#endif
    mIsGrayscale = (gPrefs->Read(wxT("/Spectrum/Grayscale"), 0L) != 0);
 
 #ifdef EXPERIMENTAL_FFT_Y_GRID
@@ -3055,9 +3074,14 @@ int TrackArtist::GetSpectrumLogMaxFreq(int deffreq)
    return mLogMaxFreq < 0 ? deffreq : mLogMaxFreq;
 }
 
-int TrackArtist::GetSpectrumWindowSize()
+int TrackArtist::GetSpectrumWindowSize(bool includeZeroPadding)
 {
-   return mWindowSize;
+#ifdef EXPERIMENTAL_ZERO_PADDED_SPECTROGRAMS
+   if (includeZeroPadding)
+      return mWindowSize * mZeroPaddingFactor;
+   else
+#endif
+      return mWindowSize;
 }
 
 #ifdef EXPERIMENTAL_FFT_SKIP_POINTS

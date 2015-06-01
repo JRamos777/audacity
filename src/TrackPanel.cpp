@@ -322,6 +322,8 @@ enum {
    OnWaveformDBID,
    OnSpectrumID,
    OnSpectrumLogID,
+   OnSpectralSelID,
+   OnSpectralSelLogID,
    OnPitchID,
 
    OnSplitStereoID,
@@ -720,6 +722,11 @@ void TrackPanel::BuildMenus(void)
    mWaveTrackMenu->Append(OnSpectrumID, _("&Spectrogram"));
    /* i18n-hint: short form of 'logarithm'*/
    mWaveTrackMenu->Append(OnSpectrumLogID, _("Spectrogram l&og(f)"));
+   /* i18n-hint: Spectral Selection is spectrogram with ability to select frequencies too'*/
+   mWaveTrackMenu->Append(OnSpectralSelID, _("S&pectral Selection"));
+   /* i18n-hint: short form of 'logarithm'*/
+   mWaveTrackMenu->Append(OnSpectralSelLogID, _("Spectral Selection lo&g(f)"));
+
    mWaveTrackMenu->Append(OnPitchID, _("Pitc&h (EAC)"));
    mWaveTrackMenu->AppendSeparator();
    mWaveTrackMenu->AppendRadioItem(OnChannelMonoID, _("&Mono"));
@@ -1042,7 +1049,7 @@ void TrackPanel::OnTimer()
    {
       wxMouseState state(::wxGetMouseState());
       wxCoord position = state.GetX();
-      const bool seek = mScrubSeekPress || state.LeftIsDown();
+      const bool seek = mScrubSeekPress || PollIsSeeking();
       ScreenToClient(&position, NULL);
       if (ContinueScrubbing(position, mScrubHasFocus, seek))
          mScrubSeekPress = false;
@@ -1721,8 +1728,7 @@ void TrackPanel::SetCursorAndTipWhenInLabel( Track * t,
 {
    if (event.m_x >= GetVRulerOffset() &&
          (t->GetKind() == Track::Wave) &&
-         (((WaveTrack *) t)->GetDisplay() <= WaveTrack::SpectrumDisplay ||
-            ((WaveTrack *) t)->GetDisplay() <= WaveTrack::SpectrumLogDisplay))
+         ( ((WaveTrack *) t)->GetDisplay() <= WaveTrack::SpectralSelectionLogDisplay) )
    {
       *ppTip = _("Click to vertically zoom in. Shift-click to zoom out. Drag to specify a zoom region.");
       SetCursor(event.ShiftDown()? *mZoomOutCursor : *mZoomInCursor);
@@ -1796,15 +1802,17 @@ void TrackPanel::SetCursorAndTipWhenInLabelTrack( LabelTrack * pLT,
 
 namespace {
 
+// This returns true if we're a spectral editing track.
 inline bool isSpectrogramTrack(const Track *pTrack, bool *pLogf = NULL) {
    if (pTrack &&
        pTrack->GetKind() == Track::Wave) {
       const int display =
          static_cast<const WaveTrack*>(pTrack)->GetDisplay();
-      const bool logF = (display == WaveTrack::SpectrumLogDisplay);
+      const bool logF = (display == WaveTrack::SpectrumLogDisplay) || 
+         (display == WaveTrack::SpectralSelectionLogDisplay);
       if (pLogf)
          *pLogf = logF;
-      return logF || (display == WaveTrack::SpectrumDisplay);
+      return (display == WaveTrack::SpectralSelectionLogDisplay) || (display == WaveTrack::SpectralSelectionDisplay);
    }
    else {
       if (pLogf)
@@ -2314,9 +2322,46 @@ double TrackPanel::FindScrubSpeed(double timeAtMouse) const
       result *= -1.0;
    return result;
 }
+
+double TrackPanel::FindSeekSpeed(double timeAtMouse) const
+{
+   // Map a time (which was mapped from a mouse position)
+   // to a signed skip speed: a multiplier of the stutter duration,
+   // by which to advance the play position.
+   // (The stutter will play at unit speed.)
+
+   // Times near the midline of the screen map to skip-less play,
+   // and the extremes to a value proportional to maximum scrub speed.
+
+   // If the maximum scrubbing speed defaults to 1.0 when you begin to scroll-scrub,
+   // the extreme skipping for scroll-seek needs to be larger to be useful.
+   static const double ARBITRARY_MULTIPLIER = 10.0;
+   const double extreme = std::max(1.0, mMaxScrubSpeed * ARBITRARY_MULTIPLIER);
+
+   // Width of visible track area, in time terms:
+   const double screen = mViewInfo->screen;
+   const double halfScreen = screen / 2.0;
+   const double origin = mViewInfo->h + halfScreen;
+
+   // The snapping zone is this fraction of screen, on each side of the
+   // center line:
+   const double snap = 0.05;
+   const double fraction =
+      std::max(snap, std::min(1.0, fabs(timeAtMouse - origin) / halfScreen));
+
+   double result = 1.0 + ((fraction - snap) / (1.0 - snap)) * (extreme - 1.0);
+   if (timeAtMouse < origin)
+      result *= -1.0;
+   return result;
+}
 #endif
 
 #ifdef EXPERIMENTAL_SCRUBBING_BASIC
+bool TrackPanel::PollIsSeeking()
+{
+   return ::wxGetMouseState().LeftIsDown();
+}
+
 bool TrackPanel::IsScrubbing()
 {
    if (mScrubToken <= 0)
@@ -2419,27 +2464,27 @@ bool TrackPanel::MaybeStartScrubbing(wxMouseEvent &event)
       return false;
 }
 
-bool TrackPanel::ContinueScrubbing(wxCoord position, bool hasFocus, bool maySkip)
+bool TrackPanel::ContinueScrubbing(wxCoord position, bool hasFocus, bool seek)
 {
    // When we don't have focus, enqueue silent scrubs until we regain focus.
    if (!hasFocus)
-      return gAudioIO->EnqueueScrubBySignedSpeed(0, mMaxScrubSpeed, maySkip);
+      return gAudioIO->EnqueueScrubBySignedSpeed(0, mMaxScrubSpeed, false);
 
-   const double newEnd = PositionToTime(position, GetLeftOffset());
+   const double time = PositionToTime(position, GetLeftOffset());
 
-   if (maySkip)
+   if (seek)
       // Cause OnTimer() to suppress the speed display
       mScrubSpeedDisplayCountdown = 1;
 
 #ifdef EXPERIMENTAL_SCRUBBING_SMOOTH_SCROLL
-   if (mSmoothScrollingScrub && !maySkip) {
-      const double speed = FindScrubSpeed(newEnd);
-      return gAudioIO->EnqueueScrubBySignedSpeed(speed, mMaxScrubSpeed, maySkip);
+   if (mSmoothScrollingScrub) {
+      const double speed = seek ? FindSeekSpeed(time) : FindScrubSpeed(time);
+      return gAudioIO->EnqueueScrubBySignedSpeed(speed, mMaxScrubSpeed, seek);
    }
    else
 #endif
       return gAudioIO->EnqueueScrubByPosition
-         (newEnd, maySkip ? 1.0 : mMaxScrubSpeed, maySkip);
+      (time, seek ? 1.0 : mMaxScrubSpeed, seek);
 }
 
 bool TrackPanel::StopScrubbing()
@@ -2932,7 +2977,8 @@ inline double findMaxRatio(double center, double rate)
 
 void TrackPanel::SnapCenterOnce(WaveTrack *pTrack, bool up)
 {
-   const int windowSize = mTrackArtist->GetSpectrumWindowSize();
+   // Always spectrogram, never pitch view, pass true
+   const int windowSize = mTrackArtist->GetSpectrumWindowSize(true);
    const double rate = pTrack->GetRate();
    const double nyq = rate / 2.0;
    const double binFrequency = rate / windowSize;
@@ -2993,7 +3039,10 @@ void TrackPanel::StartSnappingFreqSelection (WaveTrack *pTrack)
 
    // Use same settings as are now used for spectrogram display,
    // except, shrink the window as needed so we get some answers
-   int windowSize = mTrackArtist->GetSpectrumWindowSize();
+
+   // Always spectrogram, never pitch view, pass true
+   int windowSize = mTrackArtist->GetSpectrumWindowSize(true);
+
    while(windowSize > effectiveLength)
       windowSize >>= 1;
    int windowType;
@@ -3083,7 +3132,9 @@ void TrackPanel::ExtendFreqSelection(int mouseYCoordinate, int trackTopEdge,
 
    const WaveTrack* wt = mFreqSelTrack;
    const int display = wt->GetDisplay();
-   const bool logF = display == WaveTrack::SpectrumLogDisplay;
+   const bool logF = (display == WaveTrack::SpectrumLogDisplay) ||
+      (display == WaveTrack::SpectralSelectionLogDisplay) 
+      ;
    const double rate =  wt->GetRate();
    const double frequency =
       PositionToFrequency(true, mouseYCoordinate,
@@ -4566,7 +4617,7 @@ void TrackPanel::HandleVZoomClick( wxMouseEvent & event )
 
    // don't do anything if track is not wave or Spectrum/log Spectrum
    if (((mCapturedTrack->GetKind() == Track::Wave) &&
-            (((WaveTrack*)mCapturedTrack)->GetDisplay() <= WaveTrack::SpectrumLogDisplay))
+            (((WaveTrack*)mCapturedTrack)->GetDisplay() <= WaveTrack::SpectralSelectionLogDisplay))
 #ifdef USE_MIDI
             || mCapturedTrack->GetKind() == Track::Note
 #endif
@@ -4655,8 +4706,11 @@ void TrackPanel::HandleVZoomButtonUp( wxMouseEvent & event )
    int fftSkipPoints=0;
 #endif //EXPERIMENTAL_FFT_SKIP_POINTS
    double rate = ((WaveTrack *)track)->GetRate();
-   spectrum = ((WaveTrack *) track)->GetDisplay() == WaveTrack::SpectrumDisplay;
-   spectrumLog=(((WaveTrack *) track)->GetDisplay() == WaveTrack::SpectrumLogDisplay);
+   spectrum = (((WaveTrack *) track)->GetDisplay() == WaveTrack::SpectrumDisplay) ||
+      (((WaveTrack *) track)->GetDisplay() == WaveTrack::SpectralSelectionDisplay)  ;
+   spectrumLog=(((WaveTrack *) track)->GetDisplay() == WaveTrack::SpectrumLogDisplay) ||
+      (((WaveTrack *) track)->GetDisplay() == WaveTrack::SpectralSelectionLogDisplay) 
+      ;
    if(spectrum) {
       min = mTrackArtist->GetSpectrumMinFreq(0);
       if(min < 0)
@@ -4664,7 +4718,9 @@ void TrackPanel::HandleVZoomButtonUp( wxMouseEvent & event )
       max = mTrackArtist->GetSpectrumMaxFreq(8000);
       if(max > rate/2.)
          max = rate/2.;
-      windowSize = mTrackArtist->GetSpectrumWindowSize();
+
+      // Always spectrogram, never pitch view, pass true
+      windowSize = mTrackArtist->GetSpectrumWindowSize(true);
 #ifdef EXPERIMENTAL_FFT_SKIP_POINTS
       fftSkipPoints = mTrackArtist->GetSpectrumFftSkipPoints();
 #endif //EXPERIMENTAL_FFT_SKIP_POINTS
@@ -4679,7 +4735,9 @@ void TrackPanel::HandleVZoomButtonUp( wxMouseEvent & event )
          max = mTrackArtist->GetSpectrumLogMaxFreq(lrint(rate/2.));
          if(max > rate/2.)
             max = rate/2.;
-         windowSize = mTrackArtist->GetSpectrumWindowSize();
+
+         // Always spectrogram, never pitch view, pass true
+         windowSize = mTrackArtist->GetSpectrumWindowSize(true);
 #ifdef EXPERIMENTAL_FFT_SKIP_POINTS
          fftSkipPoints = mTrackArtist->GetSpectrumFftSkipPoints();
 #endif //EXPERIMENTAL_FFT_SKIP_POINTS
@@ -7335,19 +7393,20 @@ void TrackPanel::DrawEverythingElse(wxDC * dc,
 #ifdef EXPERIMENTAL_SCRUBBING_BASIC
 void TrackPanel::DrawScrubSpeed(wxDC &dc)
 {
+   // Halt scrubbing and associated display when some other program
+   // has focus
    if (!mScrubHasFocus)
       return;
-
-   // Don't draw it during stutter play with shift down
-   if (!::wxGetMouseState().LeftDown() && (
-
-          mScrubSpeedDisplayCountdown > 0
-
+   
+   const bool seeking = PollIsSeeking();
+   if (// Draw for (non-scroll) scrub, sometimes, but never for seek
+       (!seeking && mScrubSpeedDisplayCountdown > 0)
 #ifdef EXPERIMENTAL_SCRUBBING_SMOOTH_SCROLL
-          || mSmoothScrollingScrub
+      // Draw always for scroll-scrub and for scroll-seek
+      || mSmoothScrollingScrub
 #endif
 
-   )) {
+   ) {
       int panelWidth, panelHeight;
       GetSize(&panelWidth, &panelHeight);
 
@@ -7360,16 +7419,23 @@ void TrackPanel::DrawScrubSpeed(wxDC &dc)
       const double speed =
 #ifdef EXPERIMENTAL_SCRUBBING_SMOOTH_SCROLL
          mSmoothScrollingScrub
-         ? FindScrubSpeed(PositionToTime(xx, GetLeftOffset()))
+         ? seeking
+            ?  FindSeekSpeed(PositionToTime(xx, GetLeftOffset()))
+            :  FindScrubSpeed(PositionToTime(xx, GetLeftOffset()))
          :
 #endif
-         mMaxScrubSpeed;
+           mMaxScrubSpeed;
+
       const wxChar *format =
 #ifdef EXPERIMENTAL_SCRUBBING_SMOOTH_SCROLL
-         mSmoothScrollingScrub ? wxT("%+.2f")
+         mSmoothScrollingScrub
+         ? seeking
+            ? wxT("%+.2fX")
+            : wxT("%+.2f")
          :
 #endif
-         wxT("%.2f");
+           wxT("%.2f");
+
       wxString text(wxString::Format(format, speed));
 
       static const wxFont labelFont(24, wxSWISS, wxNORMAL, wxNORMAL);
@@ -8457,6 +8523,8 @@ void TrackPanel::OnTrackMenu(Track *t)
                         display != WaveTrack::WaveformDBDisplay);
       theMenu->Enable(OnSpectrumID, display != WaveTrack::SpectrumDisplay);
       theMenu->Enable(OnSpectrumLogID, display != WaveTrack::SpectrumLogDisplay);
+      theMenu->Enable(OnSpectralSelID, display != WaveTrack::SpectralSelectionDisplay);
+      theMenu->Enable(OnSpectralSelLogID, display != WaveTrack::SpectralSelectionLogDisplay);
       theMenu->Enable(OnPitchID, display != WaveTrack::PitchDisplay);
 
       WaveTrack * track = (WaveTrack *)t;
