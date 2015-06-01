@@ -744,9 +744,6 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
         unsigned chanRemSamples = mHeader.num_samples - chanFullblocks * 0x8f00 * 14 / 8;
         unsigned chanRemBytes = ((chanRemSamples * 8 / 14) + 7) & ~7;
         unsigned chanRemFrames = chanRemBytes / 8;
-        //unsigned chanRemBytes = mHeader.chan_byte_count % 0x8f00;
-        //unsigned chanRemFrames = (chanRemBytes + 7) / 8;
-        //unsigned totalRemSamples = mHeader.num_samples - samplescompleted[0] - samplescompleted[1];
 
         for (int c=0 ; c<mHeader.chan_count ; ++c)
         {
