@@ -1230,6 +1230,8 @@
 		28FE4A090ABF4E960056F5C4 /* sse_optimized.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 28FE4A070ABF4E960056F5C4 /* sse_optimized.cpp */; };
 		8406A93812D0F2510011EA01 /* EQDefaultCurves.xml in Resources */ = {isa = PBXBuildFile; fileRef = 8406A93712D0F2510011EA01 /* EQDefaultCurves.xml */; };
 		8484F31413086237002DF7F0 /* DeviceManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 8484F31213086237002DF7F0 /* DeviceManager.cpp */; };
+		E48D6B591B1C684300596651 /* ImportDSPADPCM.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E48D6B571B1C684300596651 /* ImportDSPADPCM.cpp */; };
+		E48D6B5C1B1C685600596651 /* ExportDSPADPCM.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E48D6B5A1B1C685600596651 /* ExportDSPADPCM.cpp */; };
 		ED15214D163C22F000451B5F /* lsr.c in Sources */ = {isa = PBXBuildFile; fileRef = ED152123163C220300451B5F /* lsr.c */; };
 		ED152161163C244200451B5F /* soxr.c in Sources */ = {isa = PBXBuildFile; fileRef = ED15215F163C244200451B5F /* soxr.c */; };
 		ED152162163C244200451B5F /* soxr.h in Headers */ = {isa = PBXBuildFile; fileRef = ED152160163C244200451B5F /* soxr.h */; };
@@ -2984,6 +2986,10 @@
 		8406A93712D0F2510011EA01 /* EQDefaultCurves.xml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = EQDefaultCurves.xml; path = ../presets/EQDefaultCurves.xml; sourceTree = SOURCE_ROOT; };
 		8484F31213086237002DF7F0 /* DeviceManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 3; lastKnownFileType = sourcecode.cpp.cpp; path = DeviceManager.cpp; sourceTree = "<group>"; tabWidth = 3; };
 		8484F31313086237002DF7F0 /* DeviceManager.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 3; lastKnownFileType = sourcecode.c.h; path = DeviceManager.h; sourceTree = "<group>"; tabWidth = 3; };
+		E48D6B571B1C684300596651 /* ImportDSPADPCM.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ImportDSPADPCM.cpp; sourceTree = "<group>"; };
+		E48D6B581B1C684300596651 /* ImportDSPADPCM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ImportDSPADPCM.h; sourceTree = "<group>"; };
+		E48D6B5A1B1C685600596651 /* ExportDSPADPCM.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ExportDSPADPCM.cpp; sourceTree = "<group>"; };
+		E48D6B5B1B1C685600596651 /* ExportDSPADPCM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ExportDSPADPCM.h; sourceTree = "<group>"; };
 		ED05D1020E50AD5700CC4BD3 /* audioreader.cpp */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 3; lastKnownFileType = sourcecode.cpp.cpp; path = audioreader.cpp; sourceTree = "<group>"; tabWidth = 3; };
 		ED05D1030E50AD5700CC4BD3 /* audioreader.h */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 3; lastKnownFileType = sourcecode.c.h; path = audioreader.h; sourceTree = "<group>"; tabWidth = 3; };
 		ED05D1140E50AD5700CC4BD3 /* comp_chroma.cpp */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 3; lastKnownFileType = sourcecode.cpp.cpp; path = comp_chroma.cpp; sourceTree = "<group>"; tabWidth = 3; };
@@ -4170,6 +4176,8 @@
 				1790B06D09883BFD008A330A /* ExportOGG.h */,
 				1790B06E09883BFD008A330A /* ExportPCM.cpp */,
 				1790B06F09883BFD008A330A /* ExportPCM.h */,
+				E48D6B5A1B1C685600596651 /* ExportDSPADPCM.cpp */,
+				E48D6B5B1B1C685600596651 /* ExportDSPADPCM.h */,
 			);
 			path = export;
 			sourceTree = "<group>";
@@ -4199,6 +4207,8 @@
 				1790B08A09883BFD008A330A /* ImportOGG.h */,
 				1790B08B09883BFD008A330A /* ImportPCM.cpp */,
 				1790B08C09883BFD008A330A /* ImportPCM.h */,
+				E48D6B571B1C684300596651 /* ImportDSPADPCM.cpp */,
+				E48D6B581B1C684300596651 /* ImportDSPADPCM.h */,
 				1790B08D09883BFD008A330A /* ImportPlugin.h */,
 				2801A6430BF9268700648258 /* ImportQT.cpp */,
 				2801A6440BF9268700648258 /* ImportQT.h */,
@@ -7429,6 +7439,7 @@
 				2897F6F10AB3DB5A003C20C5 /* EditToolBar.cpp in Sources */,
 				2897F6F20AB3DB5A003C20C5 /* MeterToolBar.cpp in Sources */,
 				2897F6F30AB3DB5A003C20C5 /* MixerToolBar.cpp in Sources */,
+				E48D6B5C1B1C685600596651 /* ExportDSPADPCM.cpp in Sources */,
 				2897F6F40AB3DB5A003C20C5 /* SelectionBar.cpp in Sources */,
 				2897F6F50AB3DB5A003C20C5 /* ToolBar.cpp in Sources */,
 				2897F6F60AB3DB5A003C20C5 /* ToolDock.cpp in Sources */,
@@ -7544,6 +7555,7 @@
 				28884953131B6CF600B59735 /* fi.po in Sources */,
 				28884954131B6CF600B59735 /* fr.po in Sources */,
 				28884955131B6CF600B59735 /* ga.po in Sources */,
+				E48D6B591B1C684300596651 /* ImportDSPADPCM.cpp in Sources */,
 				28884956131B6CF600B59735 /* gl.po in Sources */,
 				28884957131B6CF600B59735 /* he.po in Sources */,
 				28884958131B6CF600B59735 /* hi.po in Sources */,
@@ -8128,6 +8140,7 @@
 					"-lFLAC",
 				);
 				PRODUCT_NAME = Audacity;
+				SDKROOT = macosx10.6;
 				STRIP_INSTALLED_PRODUCT = NO;
 				USER_HEADER_SEARCH_PATHS = "$(TOPLEVEL)/include $(TOPLEVEL)/mac/config/$(arch)/src/** $(TOPLEVEL)/mac $(TOPLEVEL)/src/** $(TOPLEVEL)/lib-src/FileDialog $(TOPLEVEL)/lib-src/libflac/include $(TOPLEVEL)/lib-src/libid3tag $(TOPLEVEL)/lib-src/lame $(TOPLEVEL)/mac/config/$(arch)/lib-src/libmad $(TOPLEVEL)/lib-src/libmad $(TOPLEVEL)/lib-src/libogg/include $(TOPLEVEL)/lib-src/libnyquist/nyq $(TOPLEVEL)/mac/config/$(arch)/lib-src/libsndfile/** $(TOPLEVEL)/lib-src/libsndfile/src $(TOPLEVEL)/lib-src/libsoxr/src $(TOPLEVEL)/lib-src/libvamp $(TOPLEVEL)/lib-src/libvorbis/include $(TOPLEVEL)/lib-src/portaudio-v19/include $(TOPLEVEL)/lib-src/portmixer/px_common $(TOPLEVEL)/lib-src/portsmf $(TOPLEVEL)/mac/config/$(arch)/lib-src/soundtouch/** $(TOPLEVEL)/lib-src/soundtouch/include $(TOPLEVEL)/lib-src/lv2/lv2 $(TOPLEVEL)/lib-src/lv2/lilv $(TOPLEVEL)/lib-src/lv2/suil $(TOPLEVEL)/lib-src/twolame/libtwolame $(TOPLEVEL)/mac/config/$(arch)/lib-src/sbsms/**";
 			};
@@ -8543,6 +8556,7 @@
 					"-lFLAC",
 				);
 				PRODUCT_NAME = Audacity;
+				SDKROOT = macosx10.6;
 				STRIP_INSTALLED_PRODUCT = NO;
 				USER_HEADER_SEARCH_PATHS = "$(TOPLEVEL)/include $(TOPLEVEL)/mac/config/$(arch)/src/** $(TOPLEVEL)/mac $(TOPLEVEL)/src/** $(TOPLEVEL)/lib-src/FileDialog $(TOPLEVEL)/lib-src/libflac/include $(TOPLEVEL)/lib-src/libid3tag $(TOPLEVEL)/lib-src/lame $(TOPLEVEL)/mac/config/$(arch)/lib-src/libmad $(TOPLEVEL)/lib-src/libmad $(TOPLEVEL)/lib-src/libogg/include $(TOPLEVEL)/lib-src/libnyquist/nyq $(TOPLEVEL)/mac/config/$(arch)/lib-src/libsndfile/** $(TOPLEVEL)/lib-src/libsndfile/src $(TOPLEVEL)/lib-src/libsoxr/src $(TOPLEVEL)/lib-src/libvamp $(TOPLEVEL)/lib-src/libvorbis/include $(TOPLEVEL)/lib-src/portaudio-v19/include $(TOPLEVEL)/lib-src/portmixer/px_common $(TOPLEVEL)/lib-src/portsmf $(TOPLEVEL)/mac/config/$(arch)/lib-src/soundtouch/** $(TOPLEVEL)/lib-src/soundtouch/include $(TOPLEVEL)/lib-src/lv2/lv2 $(TOPLEVEL)/lib-src/lv2/lilv $(TOPLEVEL)/lib-src/lv2/suil $(TOPLEVEL)/lib-src/twolame/libtwolame $(TOPLEVEL)/mac/config/$(arch)/lib-src/sbsms/**";
 			};
@@ -8882,6 +8896,7 @@
 					"-lFLAC",
 				);
 				PRODUCT_NAME = Audacity;
+				SDKROOT = macosx10.6;
 				STRIP_INSTALLED_PRODUCT = NO;
 				USER_HEADER_SEARCH_PATHS = "$(TOPLEVEL)/include $(TOPLEVEL)/mac/config/$(arch)/src/** $(TOPLEVEL)/mac $(TOPLEVEL)/src/** $(TOPLEVEL)/lib-src/FileDialog $(TOPLEVEL)/lib-src/libflac/include $(TOPLEVEL)/lib-src/libid3tag $(TOPLEVEL)/lib-src/lame $(TOPLEVEL)/mac/config/$(arch)/lib-src/libmad $(TOPLEVEL)/lib-src/libmad $(TOPLEVEL)/lib-src/libogg/include $(TOPLEVEL)/lib-src/libnyquist/nyq $(TOPLEVEL)/mac/config/$(arch)/lib-src/libsndfile/** $(TOPLEVEL)/lib-src/libsndfile/src $(TOPLEVEL)/lib-src/libsoxr/src $(TOPLEVEL)/lib-src/libvamp $(TOPLEVEL)/lib-src/libvorbis/include $(TOPLEVEL)/lib-src/portaudio-v19/include $(TOPLEVEL)/lib-src/portmixer/px_common $(TOPLEVEL)/lib-src/portsmf $(TOPLEVEL)/mac/config/$(arch)/lib-src/soundtouch/** $(TOPLEVEL)/lib-src/soundtouch/include $(TOPLEVEL)/lib-src/lv2/lv2 $(TOPLEVEL)/lib-src/lv2/lilv $(TOPLEVEL)/lib-src/lv2/suil $(TOPLEVEL)/lib-src/twolame/libtwolame $(TOPLEVEL)/mac/config/$(arch)/lib-src/sbsms/**";
 			};
@@ -9441,6 +9456,7 @@
 					"-lFLAC",
 				);
 				PRODUCT_NAME = Audacity;
+				SDKROOT = macosx10.6;
 				STRIP_INSTALLED_PRODUCT = NO;
 				USER_HEADER_SEARCH_PATHS = "$(TOPLEVEL)/include $(TOPLEVEL)/mac/config/$(arch)/src/** $(TOPLEVEL)/mac $(TOPLEVEL)/src/** $(TOPLEVEL)/lib-src/FileDialog $(TOPLEVEL)/lib-src/libflac/include $(TOPLEVEL)/lib-src/libid3tag $(TOPLEVEL)/lib-src/lame $(TOPLEVEL)/mac/config/$(arch)/lib-src/libmad $(TOPLEVEL)/lib-src/libmad $(TOPLEVEL)/lib-src/libogg/include $(TOPLEVEL)/lib-src/libnyquist/nyq $(TOPLEVEL)/mac/config/$(arch)/lib-src/libsndfile/** $(TOPLEVEL)/lib-src/libsndfile/src $(TOPLEVEL)/lib-src/libsoxr/src $(TOPLEVEL)/lib-src/libvamp $(TOPLEVEL)/lib-src/libvorbis/include $(TOPLEVEL)/lib-src/portaudio-v19/include $(TOPLEVEL)/lib-src/portmixer/px_common $(TOPLEVEL)/lib-src/portsmf $(TOPLEVEL)/mac/config/$(arch)/lib-src/soundtouch/** $(TOPLEVEL)/lib-src/soundtouch/include $(TOPLEVEL)/lib-src/lv2/lv2 $(TOPLEVEL)/lib-src/lv2/lilv $(TOPLEVEL)/lib-src/lv2/suil $(TOPLEVEL)/lib-src/twolame/libtwolame $(TOPLEVEL)/mac/config/$(arch)/lib-src/sbsms/**";
 			};
