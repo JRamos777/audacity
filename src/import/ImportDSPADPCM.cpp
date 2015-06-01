@@ -66,6 +66,8 @@ static inline int16_t bswap16(int16_t val)
 
 #endif
 
+typedef unsigned char TADPCMBlock[8];
+
 /* Standard DSPADPCM header */
 struct dspadpcm_header
 {
@@ -411,7 +413,7 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
     unsigned long samplescompleted = 0;
     short hist[2] = {mHeader.hist1, mHeader.hist2};
 
-    unsigned char adpcmBlock[4096][8];
+    TADPCMBlock* adpcmBlock = new TADPCMBlock[4096];
     unsigned blockFrame = 0;
     short pcmBlock[14];
     while (samplescompleted < mHeader.num_samples)
@@ -459,6 +461,7 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
         delete channel;
+        delete[] adpcmBlock;
         return updateResult;
     }
 
@@ -478,6 +481,7 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
         (*outTracks)[1] = lt;
     }
 
+    delete[] adpcmBlock;
     return updateResult;
 }
 
@@ -547,7 +551,9 @@ int DSPADPCMStandardStereoImportFileHandle::Import(TrackFactory *trackFactory,
     short hist[2][2] = {{mHeader[0].hist1, mHeader[0].hist2},
                         {mHeader[1].hist1, mHeader[1].hist2}};
 
-    unsigned char adpcmBlock[2][4096][8];
+    TADPCMBlock* adpcmBlock[2];
+    adpcmBlock[0] = new TADPCMBlock[4096];
+    adpcmBlock[1] = new TADPCMBlock[4096];
     unsigned blockFrame[2] = {};
     short pcmBlock[14];
     while (MAX(samplescompleted[0], samplescompleted[1]) <
@@ -604,6 +610,8 @@ int DSPADPCMStandardStereoImportFileHandle::Import(TrackFactory *trackFactory,
     {
         for (int c=0 ; c<2 ; c++)
             delete channels[c];
+        delete[] adpcmBlock[0];
+        delete[] adpcmBlock[1];
         return updateResult;
     }
 
@@ -625,6 +633,8 @@ int DSPADPCMStandardStereoImportFileHandle::Import(TrackFactory *trackFactory,
         (*outTracks)[2] = lt;
     }
 
+    delete[] adpcmBlock[0];
+    delete[] adpcmBlock[1];
     return updateResult;
 }
 
@@ -697,7 +707,7 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
 
     /* Compute number of full-sized blocks */
     unsigned chanFullblocks = mHeader.chan_byte_count / 0x8f00;
-    unsigned char adpcmBlock[4576][8];
+    TADPCMBlock* adpcmBlock = new TADPCMBlock[4576];
     short pcmBlock[14];
     for (int b=0 ; b<chanFullblocks ; ++b)
     {
@@ -783,6 +793,7 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
     {
         for (int c=0 ; c<2 ; c++)
             delete channels[c];
+        delete[] adpcmBlock;
         return updateResult;
     }
 
@@ -805,6 +816,7 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
         (*outTracks)[mHeader.chan_count] = lt;
     }
 
+    delete[] adpcmBlock;
     return updateResult;
 }
 
