@@ -773,29 +773,32 @@ int ExportDSPADPCM::Export(AudacityProject *project,
 
     /* See if project contains loop region */
     TrackListOfKindIterator labelIt(Track::Label);
-    const LabelTrack* labelTrack = (LabelTrack*)labelIt.First(tracks);
+    const LabelTrack* labelTrack;
     bool loops = false;
     uint32_t loop_start_sample = 0;
     uint32_t loop_start_nibble = 0;
     uint32_t loop_end_nibble = 0;
-    do
+    if ((labelTrack = (LabelTrack*)labelIt.First(tracks)))
     {
-        for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
+        do
         {
-            const LabelStruct* label = labelTrack->GetLabel(l);
-            if (!label->title.CmpNoCase(wxT("loop")))
+            for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
             {
-                double nibblesPerSec = sampleRate * 16 / 14.0;
-                loops = true;
-                loop_start_sample = label->getT0() * sampleRate;
-                loop_start_nibble = label->getT0() * nibblesPerSec;
-                loop_end_nibble = label->getT1() * nibblesPerSec;
-                break;
+                const LabelStruct* label = labelTrack->GetLabel(l);
+                if (!label->title.CmpNoCase(wxT("loop")))
+                {
+                    double nibblesPerSec = sampleRate * 16 / 14.0;
+                    loops = true;
+                    loop_start_sample = label->getT0() * sampleRate;
+                    loop_start_nibble = label->getT0() * nibblesPerSec;
+                    loop_end_nibble = label->getT1() * nibblesPerSec;
+                    break;
+                }
             }
-        }
-        if (loops)
-            break;
-    } while ((labelTrack = (LabelTrack*)labelIt.Next()));
+            if (loops)
+                break;
+        } while ((labelTrack = (LabelTrack*)labelIt.Next()));
+    }
 
     bool loop_hist_added[2][2] = {{false, false}, {false, false}};
     int16_t loop_hist[2][2];
