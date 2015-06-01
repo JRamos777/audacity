@@ -740,16 +740,20 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressSuccess)
     {
-        /* Compute last block (round up to nearest block size) */
-        unsigned chanRemBytes = mHeader.chan_byte_count % 0x8f00;
-        unsigned chanRemFrames = (chanRemBytes + 7) / 8;
+        /* Compute last block */
+        unsigned chanRemSamples = mHeader.num_samples - chanFullblocks * 0x8f00 * 14 / 8;
+        unsigned chanRemBytes = ((chanRemSamples * 8 / 14) + 7) & ~7;
+        unsigned chanRemFrames = chanRemBytes / 8;
+        //unsigned chanRemBytes = mHeader.chan_byte_count % 0x8f00;
+        //unsigned chanRemFrames = (chanRemBytes + 7) / 8;
+        //unsigned totalRemSamples = mHeader.num_samples - samplescompleted[0] - samplescompleted[1];
 
         for (int c=0 ; c<mHeader.chan_count ; ++c)
         {
-            mFile->Read(adpcmBlock, chanRemFrames * 8);
+            unsigned long samplesremaining = chanRemSamples;
+            mFile->Read(adpcmBlock, chanRemBytes);
             for (int f=0 ; f<chanRemFrames ; ++f)
             {
-                unsigned long samplesremaining = mHeader.num_samples - samplescompleted[c];
                 unsigned char cIdx = (adpcmBlock[f][0]>>4) & 0xf;
                 short factor1 = mHeader.coefs[c][cIdx*2];
                 short factor2 = mHeader.coefs[c][cIdx*2+1];
@@ -773,6 +777,7 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
                 }
                 channels[c]->Append((samplePtr)pcmBlock, int16Sample, (sampleCount)s);
                 samplescompleted[c] += s;
+                samplesremaining -= s;
             }
         }
     }
