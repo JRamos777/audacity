@@ -158,25 +158,11 @@ static inline unsigned nibbleidx_to_sampleidx(unsigned nibbleidx)
     return frame * 14 + frame_samp;
 }
 
-static inline unsigned sampleidx_to_nibbleidx(unsigned sampleidx)
-{
-    unsigned frame = sampleidx / 14;
-    unsigned frame_samp = sampleidx % 14;
-    return frame * 16 + frame_samp + 2;
-}
-
 static inline unsigned byteidx_to_sampleidx(unsigned byteidx)
 {
     unsigned frame = byteidx / 8;
     unsigned frame_byte = MAX(1, byteidx % 8) - 1;
     return frame * 14 + frame_byte * 2;
-}
-
-static inline unsigned sampleidx_to_byteidx(unsigned sampleidx)
-{
-    unsigned frame = sampleidx / 14;
-    unsigned frame_samp = sampleidx % 14;
-    return frame * 8 + frame_samp / 2 + 1;
 }
 
 static const wxChar *exts[] =

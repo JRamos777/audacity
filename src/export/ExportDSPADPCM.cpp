@@ -9,6 +9,17 @@
 **********************************************************************/
 
 #include <string>
+#include <wx/defs.h>
+#include <wx/choice.h>
+#include <wx/dynlib.h>
+#include <wx/filename.h>
+#include <wx/intl.h>
+#include <wx/timer.h>
+#include <wx/msgdlg.h>
+#include <wx/progdlg.h>
+#include <wx/string.h>
+#include <wx/textctrl.h>
+#include <wx/window.h>
 
 #include "../Audacity.h"
 #include "../FileFormats.h"
@@ -69,6 +80,20 @@ static inline int16_t bswap16(int16_t val)
 
 #endif
 
+static inline unsigned sampleidx_to_nibbleidx(unsigned sampleidx)
+{
+    unsigned frame = sampleidx / 14;
+    unsigned frame_samp = sampleidx % 14;
+    return frame * 16 + frame_samp + 2;
+}
+
+static inline unsigned sampleidx_to_byteidx(unsigned sampleidx)
+{
+    unsigned frame = sampleidx / 14;
+    unsigned frame_samp = sampleidx % 14;
+    return frame * 8 + frame_samp / 2 + 1;
+}
+
 /* Standard DSPADPCM header */
 struct dspadpcm_header
 {
@@ -90,6 +115,22 @@ struct dspadpcm_header
     int16_t loop_hist2;
     uint16_t pad[11];
 };
+
+/* RS03 Header (following magic) */
+struct rs03_header
+{
+    uint32_t chan_count;
+    uint32_t num_samples;
+    uint32_t sample_rate;
+    uint32_t chan_byte_count;
+    uint16_t loop_flag;
+    uint16_t format;
+    uint32_t loop_start;
+    uint32_t loop_end;
+    int16_t coefs[2][16];
+};
+
+typedef unsigned char TADPCMBlock[8];
 
 /* Reference:
  * https://code.google.com/p/brawltools/source/browse/trunk/BrawlLib/Wii/Audio/AudioConverter.cs
@@ -495,7 +536,7 @@ static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut)
 }
 
 //Make sure source includes the yn values (16 samples total)
-static void DSPEncodeChunk(short* pcmInOut, int sampleCount, unsigned char* adpcmOut, const short* coefsIn)
+static void DSPEncodeFrame(short* pcmInOut, int sampleCount, unsigned char* adpcmOut, const short* coefsIn)
 {
     int buffer1[128];
     int buffer2[112];
@@ -634,16 +675,148 @@ static void DSPEncodeChunk(short* pcmInOut, int sampleCount, unsigned char* adpc
 // Begin Plugin
 //----------------------------------------------------------------------------
 
-struct
+enum ELayout
 {
-    wxChar *name;
-    wxChar *desc;
-    wxChar *ext;
-}
-static const kFormats[] =
-{
-{ wxT("DSP"), XO("Nintendo GameCube DSPADPCM"), wxT("dsp") },
+    DSPADPCM_STD = 0,
+    DSPADPCM_RS03 = 1,
+    DSPADPCM_LAYOUTMAX = 2
 };
+
+static const struct SLayouts
+{
+    enum ELayout fmt;
+    wxChar* name;
+    wxChar* desc;
+
+} kLayouts[] =
+{
+{
+    DSPADPCM_STD,
+    wxT("Standard Mono"),
+    wxT("Standard mono .dsp layout from Nintendo's DSPADPCM.EXE.\n\nStereo projects export a L/R pair.")
+},
+{
+    DSPADPCM_RS03,
+    wxT("RS03 Stereo"),
+    wxT("Block-interleaved RS03 layout used in Metroid Prime 2")
+}
+};
+
+//----------------------------------------------------------------------------
+// User Prefs
+//----------------------------------------------------------------------------
+
+static int ReadExportLayoutPref()
+{
+    return gPrefs->Read(wxT("/FileFormats/ExportFormat_DSPADPCM"),
+                        (long int)0);
+}
+
+static void WriteExportLayoutPref(int format)
+{
+    gPrefs->Write(wxT("/FileFormats/ExportFormat_DSPADPCM"), (long int)format);
+    gPrefs->Flush();
+}
+
+//----------------------------------------------------------------------------
+// ExportDSPADPCMOptions Class
+//----------------------------------------------------------------------------
+
+#define ID_LAYOUT_CHOICE         7501
+
+class ExportDSPADPCMOptions : public wxDialog
+{
+public:
+
+    ExportDSPADPCMOptions(wxWindow *parent, int layout);
+    void PopulateOrExchange(ShuttleGui & S);
+    void OnLayoutChoice(wxCommandEvent & evt);
+    void OnOK(wxCommandEvent& event);
+
+private:
+    wxArrayString mLayoutNames;
+    wxChoice *mLayoutChoice;
+    wxStaticText *mDesc;
+    wxButton *mOk;
+    int mLayoutFromChoice;
+
+    DECLARE_EVENT_TABLE()
+};
+
+BEGIN_EVENT_TABLE(ExportDSPADPCMOptions, wxDialog)
+EVT_CHOICE(ID_LAYOUT_CHOICE,   ExportDSPADPCMOptions::OnLayoutChoice)
+EVT_BUTTON(wxID_OK,            ExportDSPADPCMOptions::OnOK)
+END_EVENT_TABLE()
+
+ExportDSPADPCMOptions::ExportDSPADPCMOptions(wxWindow * WXUNUSED(parent), int sellayout)
+    :  wxDialog(NULL, wxID_ANY, wxString(_("Specify Layout")))
+{
+    SetName(GetTitle());
+
+    mOk = NULL;
+
+    mLayoutFromChoice = ReadExportLayoutPref();
+    if (mLayoutFromChoice < 0 || mLayoutFromChoice >= DSPADPCM_LAYOUTMAX)
+        mLayoutFromChoice = 0;
+
+    for (int i=0 ; i<DSPADPCM_LAYOUTMAX; ++i)
+        mLayoutNames.Add(kLayouts[i].name);
+
+    ShuttleGui S(this, eIsCreatingFromPrefs);
+    PopulateOrExchange(S);
+
+    Layout();
+    Fit();
+    Center();
+}
+
+#define DESC_WRAP 250
+
+void ExportDSPADPCMOptions::PopulateOrExchange(ShuttleGui & S)
+{
+    S.StartHorizontalLay(wxEXPAND, true);
+    {
+        S.StartStatic(_("DSPADPCM Layout Option"), true);
+        {
+            S.StartMultiColumn(2, wxEXPAND);
+            {
+                S.SetStretchyCol(1);
+                mLayoutChoice = S.Id(ID_LAYOUT_CHOICE)
+                                 .AddChoice(_("Layout:"),
+                                            mLayoutNames[mLayoutFromChoice],
+                                            &mLayoutNames);
+            }
+            S.EndMultiColumn();
+            mDesc = S.AddVariableText(kLayouts[mLayoutFromChoice].desc);
+            mDesc->Wrap(DESC_WRAP);
+        }
+        S.EndStatic();
+    }
+    S.EndHorizontalLay();
+
+    S.AddStandardButtons();
+    mOk = (wxButton *)wxWindow::FindWindowById(wxID_OK, this);
+
+    return;
+}
+
+void ExportDSPADPCMOptions::OnLayoutChoice(wxCommandEvent & WXUNUSED(evt))
+{
+    int choice = mLayoutChoice->GetSelection();
+    if (choice >= 0 && choice < DSPADPCM_LAYOUTMAX)
+    {
+        mDesc->SetLabel(kLayouts[choice].desc);
+        mDesc->Wrap(DESC_WRAP);
+        SetSizerAndFit(GetSizer());
+    }
+}
+
+void ExportDSPADPCMOptions::OnOK(wxCommandEvent& WXUNUSED(event))
+{
+    WriteExportLayoutPref(mLayoutChoice->GetSelection());
+    EndModal(wxID_OK);
+}
+
 
 //----------------------------------------------------------------------------
 // ExportDSPADPCM Class
@@ -652,12 +825,9 @@ static const kFormats[] =
 class ExportDSPADPCM : public ExportPlugin
 {
 public:
-
     ExportDSPADPCM();
     void Destroy();
-
-    // Required
-
+    bool DisplayOptions(wxWindow *parent, int layout = 0);
     int Export(AudacityProject *project,
                int channels,
                wxString fName,
@@ -668,21 +838,33 @@ public:
                Tags *metadata = NULL,
                int subformat = 0);
 
+private:
+    int ExportStandard(AudacityProject *project,
+                       int numChannels,
+                       const wxString& fName,
+                       bool selectionOnly,
+                       double t0,
+                       double t1,
+                       MixerSpec *mixerSpec);
+    int ExportRS03(AudacityProject *project,
+                   int numChannels,
+                   const wxString& fName,
+                   bool selectionOnly,
+                   double t0,
+                   double t1,
+                   MixerSpec *mixerSpec);
+
 };
 
 ExportDSPADPCM::ExportDSPADPCM()
     :  ExportPlugin()
 {
-    for (size_t i = 0; i < WXSIZEOF(kFormats); i++)
-    {
-        int format = AddFormat() - 1;
-
-        SetFormat(kFormats[i].name, format);
-        SetCanMetaData(false, format);
-        SetDescription(wxGetTranslation(kFormats[i].desc), format);
-        AddExtension(kFormats[i].ext, format);
-        SetMaxChannels(2, format);
-    }
+    int format = AddFormat() - 1;
+    SetFormat(wxT("DSP"), format);
+    SetCanMetaData(false, format);
+    SetDescription(wxGetTranslation(XO("Nintendo GameCube DSPADPCM")), format);
+    AddExtension(wxT("dsp"), format);
+    SetMaxChannels(2, format);
 }
 
 void ExportDSPADPCM::Destroy()
@@ -690,20 +872,21 @@ void ExportDSPADPCM::Destroy()
     delete this;
 }
 
-/**
- *
- * @param subformat Control whether we are doing a "preset" export to a popular
- * file type, or giving the user full control over libsndfile.
- */
-int ExportDSPADPCM::Export(AudacityProject *project,
-                           int numChannels,
-                           wxString fName,
-                           bool selectionOnly,
-                           double t0,
-                           double t1,
-                           MixerSpec *mixerSpec,
-                           Tags *metadata,
-                           int subformat)
+bool ExportDSPADPCM::DisplayOptions(wxWindow *parent, int layout)
+{
+    ExportDSPADPCMOptions od(parent, layout);
+    od.ShowModal();
+    return true;
+}
+
+
+int ExportDSPADPCM::ExportStandard(AudacityProject *project,
+                                   int numChannels,
+                                   const wxString& fName,
+                                   bool selectionOnly,
+                                   double t0,
+                                   double t1,
+                                   MixerSpec *mixerSpec)
 {
     double       rate = project->GetRate();
     TrackList   *tracks = project->GetTracks();
@@ -763,10 +946,8 @@ int ExportDSPADPCM::Export(AudacityProject *project,
 
     ProgressDialog *progress = new ProgressDialog(wxFileName(fName).GetName(),
                                                   selectionOnly ?
-                                                      wxString::Format(_("Exporting the selected audio as %s"),
-                                                                       GetDescription(subformat).c_str()) :
-                                                      wxString::Format(_("Exporting the entire project as %s"),
-                                                                       GetDescription(subformat).c_str()));
+                                                      _("Exporting the selected audio as Standard DSPADPCM") :
+                                                      _("Exporting the entire project as Standard DSPADPCM"));
 
     sampleCount numSamples = mixer->Process(sampleFrames);
     unsigned int packetCount = (numSamples+13) / 14;
@@ -775,33 +956,31 @@ int ExportDSPADPCM::Export(AudacityProject *project,
     TrackListOfKindIterator labelIt(Track::Label);
     const LabelTrack* labelTrack;
     bool loops = false;
-    uint32_t loop_start_sample = 0;
-    uint32_t loop_start_nibble = 0;
-    uint32_t loop_end_nibble = 0;
-    if ((labelTrack = (LabelTrack*)labelIt.First(tracks)))
+    uint32_t loopStartSample = 0;
+    uint32_t loopStartNibble = 0;
+    uint32_t loopEndNibble = 0;
+    for (labelTrack = (LabelTrack*)labelIt.First(tracks);
+         labelTrack;
+         labelTrack = (LabelTrack*)labelIt.Next())
     {
-        do
+        for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
         {
-            for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
+            const LabelStruct* label = labelTrack->GetLabel(l);
+            if (!label->title.CmpNoCase(wxT("loop")))
             {
-                const LabelStruct* label = labelTrack->GetLabel(l);
-                if (!label->title.CmpNoCase(wxT("loop")))
-                {
-                    double nibblesPerSec = sampleRate * 16 / 14.0;
-                    loops = true;
-                    loop_start_sample = label->getT0() * sampleRate;
-                    loop_start_nibble = label->getT0() * nibblesPerSec;
-                    loop_end_nibble = label->getT1() * nibblesPerSec;
-                    break;
-                }
-            }
-            if (loops)
+                loops = true;
+                loopStartSample = label->getT0() * rate;
+                loopStartNibble = sampleidx_to_nibbleidx(label->getT0() * rate);
+                loopEndNibble = sampleidx_to_nibbleidx(label->getT1() * rate);
                 break;
-        } while ((labelTrack = (LabelTrack*)labelIt.Next()));
+            }
+        }
+        if (loops)
+            break;
     }
 
     bool loop_hist_added[2][2] = {{false, false}, {false, false}};
-    int16_t loop_hist[2][2];
+    int16_t loop_hist[2][2] = {{0, 0}, {0, 0}};
 
     if (numSamples <= 2)
         goto done;
@@ -818,45 +997,42 @@ int ExportDSPADPCM::Export(AudacityProject *project,
         header.num_nibbles = bswapu32(packetCount*16);
         header.sample_rate = bswapu32(sampleRate);
         header.loop_flag = bswap16((int16_t)loops);
-        header.loop_start_nibble = bswapu32(loop_start_nibble);
-        header.loop_end_nibble = bswapu32(loop_end_nibble);
+        header.loop_start_nibble = bswapu32(loopStartNibble);
+        header.loop_end_nibble = bswapu32(loopEndNibble);
         for (int i=0 ; i<16 ; ++i)
             header.coef[i] = bswap16(coefs[i]);
-        header.hist1 = bswap16(mixed[0]);
-        header.hist2 = bswap16(mixed[1]);
         f[c].Write(&header, sizeof(header));
 
-        short convSamps[16] = {mixed[0], mixed[1]};
-        mixed += 2;
+        short convSamps[16] = {};
         unsigned char block[8];
         unsigned int writtenSamples = 0;
         for (int p=0 ; p<packetCount ; ++p)
         {
             for (int s=0 ; s<14 ; ++s)
             {
-                unsigned int sample = p*14+s+2;
+                unsigned int sample = p*14+s;
                 if (sample >= numSamples)
                     convSamps[s+2] = 0;
                 else
                     convSamps[s+2] = mixed[sample];
             }
 
-            DSPEncodeChunk(convSamps, MIN(14, packetCount * 14 - writtenSamples), block, coefs);
+            DSPEncodeFrame(convSamps, MIN(14, packetCount * 14 - writtenSamples), block, coefs);
 
             /* Resolve loop sample */
-            if (!loop_hist_added[c][0] && 
-                writtenSamples <= loop_start_sample - 1 &&
-                writtenSamples + 14 > loop_start_sample - 1)
+            if (!loop_hist_added[c][0] &&
+                writtenSamples <= loopStartSample - 1 &&
+                writtenSamples + 14 > loopStartSample - 1)
             {
                 loop_hist_added[c][0] = true;
-                loop_hist[c][0] = convSamps[loop_start_sample-writtenSamples-1];
+                loop_hist[c][0] = convSamps[loopStartSample-writtenSamples-1];
             }
             if (!loop_hist_added[c][1] &&
-                writtenSamples <= loop_start_sample - 2 &&
-                writtenSamples + 14 > loop_start_sample - 2)
+                writtenSamples <= loopStartSample - 2 &&
+                writtenSamples + 14 > loopStartSample - 2)
             {
                 loop_hist_added[c][1] = true;
-                loop_hist[c][1] = convSamps[loop_start_sample-writtenSamples-2];
+                loop_hist[c][1] = convSamps[loopStartSample-writtenSamples-2];
             }
 
             convSamps[0] = convSamps[14];
@@ -893,6 +1069,202 @@ done:
     delete mixer;
     delete[] waveTracks;
     return updateResult;
+}
+
+int ExportDSPADPCM::ExportRS03(AudacityProject *project,
+                               int numChannels,
+                               const wxString& fName,
+                               bool selectionOnly,
+                               double t0,
+                               double t1,
+                               MixerSpec *mixerSpec)
+{
+    double       rate = project->GetRate();
+    TrackList   *tracks = project->GetTracks();
+
+    unsigned int sampleRate = (unsigned int)(rate + 0.5);
+    unsigned int sampleFrames = (unsigned int)((t1 - t0)*rate + 0.5);
+
+    wxFile fs;   // will be closed when it goes out of scope
+    if (!fs.Open(fName, wxFile::write)) {
+        wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                      fName.c_str()));
+        return false;
+    }
+
+    int updateResult = eProgressSuccess;
+
+    int numWaveTracks;
+    WaveTrack **waveTracks;
+    tracks->GetWaveTracks(selectionOnly, &numWaveTracks, &waveTracks);
+    Mixer *mixer = CreateMixer(numWaveTracks, waveTracks,
+                               tracks->GetTimeTrack(),
+                               t0, t1,
+                               numChannels, sampleFrames, false,
+                               rate, int16Sample, true, mixerSpec);
+
+    ProgressDialog *progress = new ProgressDialog(wxFileName(fName).GetName(),
+                                                  selectionOnly ?
+                                                      _("Exporting the selected audio as RS03 DSPADPCM") :
+                                                      _("Exporting the entire project as RS03 DSPADPCM"));
+
+    sampleCount numSamples = mixer->Process(sampleFrames);
+    if (numSamples <= 2)
+    {
+        delete progress;
+        delete mixer;
+        delete[] waveTracks;
+        return eProgressFailed;
+    }
+
+    /* See if project contains loop region */
+    TrackListOfKindIterator labelIt(Track::Label);
+    const LabelTrack* labelTrack;
+    bool loops = false;
+    uint32_t loopStartSample = 0;
+    uint32_t loopStartByte = 0;
+    uint32_t loopEndByte = 0;
+    for (labelTrack = (LabelTrack*)labelIt.First(tracks);
+         labelTrack;
+         labelTrack = (LabelTrack*)labelIt.Next())
+    {
+        for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
+        {
+            const LabelStruct* label = labelTrack->GetLabel(l);
+            if (!label->title.CmpNoCase(wxT("loop")))
+            {
+                loops = true;
+                loopStartSample = label->getT0() * sampleRate;
+                loopStartByte = sampleidx_to_byteidx(label->getT0() * rate);
+                loopEndByte = sampleidx_to_byteidx(label->getT1() * rate);
+                break;
+            }
+        }
+        if (loops)
+            break;
+    }
+
+    short* mixed[2];
+    short coefs[2][16] = {};
+    for (int c=0 ; c<numChannels ; ++c)
+    {
+        mixed[c] = (short*)mixer->GetBuffer(c);
+        DSPCorrelateCoefs(mixed[c], numSamples, coefs[c]);
+    }
+
+    /* Compute sample/block/frame counts */
+    unsigned chanFullFrames = numSamples / 14;
+    unsigned chanFullBlocks = chanFullFrames / 4576;
+    chanFullFrames = chanFullBlocks * 4576;
+    unsigned chanFullSamples = chanFullFrames * 14;
+    unsigned chanRemSamples = numSamples - chanFullSamples;
+    unsigned chanRemBytes = ((chanRemSamples * 8 / 14) + 7) & ~7;
+    unsigned chanRemFrames = chanRemBytes / 8;
+
+    /* Write header */
+    struct rs03_header header = {};
+    header.chan_count = bswapu32(numChannels);
+    header.num_samples = bswapu32(numSamples);
+    header.sample_rate = bswapu32(sampleRate);
+    header.chan_byte_count = bswapu32(chanFullFrames * 8 + chanRemBytes);
+    header.loop_flag = bswap16((uint16_t)loops);
+    header.loop_start = bswapu32(loopStartByte);
+    header.loop_end = bswapu32(loopEndByte);
+    for (int i=0 ; i<16 ; ++i)
+        header.coefs[0][i] = bswap16(coefs[0][i]);
+    for (int i=0 ; i<16 ; ++i)
+        header.coefs[1][i] = bswap16(coefs[1][i]);
+    fs.Write("RS\x00\x03", 4);
+    fs.Write(&header, sizeof(header));
+
+    TADPCMBlock* adpcmBlock = new TADPCMBlock[4576];
+    short convSamps[16] = {};
+
+    /* Write full-blocks */
+    for (int b=0 ; b<chanFullBlocks ; ++b)
+    {
+        for (int c=0 ; c<numChannels ; ++c)
+        {
+            for (int f=0 ; f<4576 ; ++f)
+            {
+                for (int s=0 ; s<14 ; ++s)
+                {
+                    unsigned int sample = (b*4576+f)*14+s;
+                    if (sample >= numSamples)
+                        convSamps[s+2] = 0;
+                    else
+                        convSamps[s+2] = mixed[c][sample];
+                }
+                DSPEncodeFrame(convSamps, 14, adpcmBlock[f], coefs[c]);
+                convSamps[0] = convSamps[14];
+                convSamps[1] = convSamps[15];
+            }
+            fs.Write(adpcmBlock, 4576 * 8);
+        }
+        if ((updateResult = progress->Update((unsigned int)b*4576*14, numSamples)) != eProgressSuccess)
+            break;
+    }
+
+    /* Write remaining block */
+    if (updateResult == eProgressSuccess)
+    {
+        for (int c=0 ; c<numChannels ; ++c)
+        {
+            memset(adpcmBlock, 0, 4576 * 8);
+            unsigned remSamples = chanRemSamples;
+            for (int f=0 ; f<chanRemFrames ; ++f)
+            {
+                int s;
+                for (s=0 ; s<14 && s<remSamples ; ++s)
+                {
+                    unsigned int sample = chanFullSamples + f*14 + s;
+                    if (sample >= numSamples)
+                        convSamps[s+2] = 0;
+                    else
+                        convSamps[s+2] = mixed[c][sample];
+                }
+                DSPEncodeFrame(convSamps, s, adpcmBlock[f], coefs[c]);
+                convSamps[0] = convSamps[14];
+                convSamps[1] = convSamps[15];
+                remSamples -= s;
+            }
+            fs.Write(adpcmBlock, chanRemBytes);
+        }
+    }
+
+    delete progress;
+    delete mixer;
+    delete[] waveTracks;
+    delete[] adpcmBlock;
+    return updateResult;
+}
+
+int ExportDSPADPCM::Export(AudacityProject *project,
+                           int numChannels,
+                           wxString fName,
+                           bool selectionOnly,
+                           double t0,
+                           double t1,
+                           MixerSpec *mixerSpec,
+                           Tags*,
+                           int)
+{
+    if (numChannels > 2)
+    {
+        wxMessageBox(_("Project must have 1 or 2 channels"));
+        return false;
+    }
+
+    int selLayout = ReadExportLayoutPref();
+    if (selLayout < 0 || selLayout >= DSPADPCM_LAYOUTMAX)
+        selLayout = 0;
+
+    if (selLayout == DSPADPCM_STD)
+        return ExportStandard(project, numChannels, fName, selectionOnly, t0, t1, mixerSpec);
+    else if (selLayout == DSPADPCM_RS03)
+        return ExportRS03(project, numChannels, fName, selectionOnly, t0, t1, mixerSpec);
+
+    return eProgressFailed;
 }
 
 ExportPlugin *New_ExportDSPADPCM()
