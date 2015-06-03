@@ -28,6 +28,7 @@ class wxRect;
 class wxHashTable;
 
 class Track;
+class WaveDisplay;
 class WaveTrack;
 class WaveTrackCache;
 class WaveClip;
@@ -139,7 +140,7 @@ class AUDACITY_DLL_API TrackArtist {
 
    void DrawClipWaveform(WaveTrack *track, WaveClip *clip,
                          wxDC & dc, const wxRect & r, const ViewInfo *viewInfo,
-                         bool drawEnvelope, bool drawSamples, bool drawSliders,
+                         bool drawEnvelope, bool drawSamples,
                          bool dB, bool muted);
 
    void DrawClipSpectrum(WaveTrackCache &cache, WaveClip *clip,
@@ -156,13 +157,11 @@ class AUDACITY_DLL_API TrackArtist {
 #ifdef EXPERIMENTAL_OUTPUT_DISPLAY
    void DrawMinMaxRMS(wxDC & dc, const wxRect & r, const double env[],
                       float zoomMin, float zoomMax, bool dB,
-                      const float min[], const float max[], const float rms[],
-                      const int bl[], bool showProgress, bool muted, const float gain);
+                      const WaveDisplay &display, bool showProgress, bool muted, const float gain);
 #else
    void DrawMinMaxRMS(wxDC & dc, const wxRect & r, const double env[],
                       float zoomMin, float zoomMax, bool dB,
-                      const float min[], const float max[], const float rms[],
-                      const int bl[], bool showProgress, bool muted);
+                      const WaveDisplay &display, bool showProgress, bool muted);
 #endif
    void DrawIndividualSamples(wxDC & dc, const wxRect & r,
                               float zoomMin, float zoomMax, bool dB,
@@ -250,5 +249,8 @@ class AUDACITY_DLL_API TrackArtist {
 extern int GetWaveYPos(float value, float min, float max,
                        int height, bool dB, bool outer, float dBr,
                        bool clip);
+extern float FromDB(float value, double dBRange);
+extern float ValueOfPixel(int y, int height, bool offset,
+                          bool dB, double dBRange, float zoomMin, float zoomMax);
 
 #endif                          // define __AUDACITY_TRACKARTIST__
