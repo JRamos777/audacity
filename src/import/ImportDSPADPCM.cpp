@@ -62,11 +62,12 @@ static inline int16_t bswap16(int16_t val)
 #else
 
 #define bswapu32(val) (val)
-#define bswapu16(val) (val)
+#define bswap16(val) (val)
 
 #endif
 
-typedef unsigned char TADPCMBlock[8];
+typedef unsigned char TADPCMFrame[8];
+typedef unsigned char TADPCMStereoFrame[4][2][2];
 
 /* Standard DSPADPCM header */
 struct dspadpcm_header
@@ -140,6 +141,54 @@ static void SwapRS03Header(struct rs03_header* h)
         h->coefs[1][c] = bswap16(h->coefs[1][c]);
 }
 
+/* FSB Header (following magic) */
+struct fsb3_header
+{
+    uint32_t sampleCount;
+    uint32_t headerSize;
+    uint32_t dataSize;
+    uint32_t version;
+    uint32_t mode;
+};
+
+/* FSB3.1 Sample Header */
+#define FSB_MAX_NAME_LENGTH 30
+#define FSOUND_LOOP_NORMAL 0x00000002
+#define FSOUND_GCADPCM 0x02000000
+struct fsb31_sample_header
+{
+    uint16_t size;
+    char     name[FSB_MAX_NAME_LENGTH];
+    uint32_t sampleCount;
+    uint32_t dataSize;
+    uint32_t loopStart;
+    uint32_t loopEnd;
+    uint32_t mode;
+    uint32_t defaultFreq;
+    uint16_t defVol;
+    int16_t  defPan;
+    uint16_t defPri;
+    uint16_t channelCount;
+    float    minDistance;
+    float    maxDistance;
+    uint32_t varFreg;
+    uint16_t varVol;
+    int16_t  varPan;
+};
+
+struct fsb_dspadpcm_channel
+{
+    int16_t coef[16];
+    char padding[14];
+};
+
+static void SwapFSBDSPADPCMChannels(struct fsb_dspadpcm_channel* h, int chanCount)
+{
+    for (int c=0 ; c<chanCount ; ++c)
+        for (int co=0 ; co<16 ; ++co)
+            h[c].coef[co] = bswap16(h[c].coef[co]);
+}
+
 static const int nibble_to_int[16] = {0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1};
 
 static inline short samp_clamp(int val) {
@@ -167,7 +216,10 @@ static inline unsigned byteidx_to_sampleidx(unsigned byteidx)
 
 static const wxChar *exts[] =
 {
-    wxT("dsp")
+    wxT("dsp"),
+    wxT("fsb"),
+    wxT("strm"),
+    wxT("csmp")
 };
 
 /**************************************************************************
@@ -209,6 +261,7 @@ public:
     wxInt32 GetStreamCount(){ return 1; }
     wxArrayString *GetStreamInfo(){ return NULL; }
     void SetStreamUsage(wxInt32 WXUNUSED(StreamID), bool WXUNUSED(Use)){}
+    bool valid;
 };
 
 /* Mono standard .dsp file */
@@ -223,9 +276,9 @@ public:
     int Import(TrackFactory *trackFactory, Track ***outTracks,
                int *outNumTracks, Tags *tags);
 
+protected:
+    bool mSampleIndexedLoops;
 private:
-    friend class DSPADPCMImportPlugin;
-    bool valid;
     wxFile *mFile;
     struct dspadpcm_header mHeader;
 };
@@ -238,13 +291,11 @@ public:
     ~DSPADPCMStandardStereoImportFileHandle();
 
     wxString GetFileDescription() { return _("Stereo Pair GameCube DSPADPCM"); }
-    int GetFileUncompressedBytes() { return MAX(mHeader[0].num_samples, mHeader[1].num_samples) * 2; }
+    int GetFileUncompressedBytes() { return MAX(mHeader[0].num_samples, mHeader[1].num_samples) * 2 * 2; }
     int Import(TrackFactory *trackFactory, Track ***outTracks,
                int *outNumTracks, Tags *tags);
 
 private:
-    friend class DSPADPCMImportPlugin;
-    bool valid;
     wxFile *mFile[2];
     struct dspadpcm_header mHeader[2];
 };
@@ -257,15 +308,56 @@ public:
     ~DSPADPCMRS03ImportFileHandle();
 
     wxString GetFileDescription() { return _("RS03 Stereo GameCube DSPADPCM"); }
-    int GetFileUncompressedBytes() { return mHeader.num_samples * 2; }
+    int GetFileUncompressedBytes() { return mHeader.num_samples * 2 * mHeader.chan_count; }
     int Import(TrackFactory *trackFactory, Track ***outTracks,
                int *outNumTracks, Tags *tags);
 
 private:
-    friend class DSPADPCMImportPlugin;
-    bool valid;
     wxFile *mFile;
     struct rs03_header mHeader;
+};
+
+/* Mono CSMP-headered file */
+class DSPADPCMCSMPMonoImportFileHandle : public DSPADPCMStandardMonoImportFileHandle
+{
+    float mVolume;
+public:
+    DSPADPCMCSMPMonoImportFileHandle(wxFile *file, const wxString& filename, float volume)
+    : DSPADPCMStandardMonoImportFileHandle(file, filename), mVolume(volume)
+    {
+        mSampleIndexedLoops = true;
+    }
+
+    wxString GetFileDescription() { return _("Mono CSMP DSPADPCM"); }
+    int Import(TrackFactory *trackFactory, Track ***outTracks,
+               int *outNumTracks, Tags *tags)
+    {
+        int result = DSPADPCMStandardMonoImportFileHandle::Import(trackFactory, outTracks, outNumTracks, tags);
+        if (result == eProgressSuccess)
+        {
+            WaveTrack* wt = (WaveTrack*)(*outTracks)[0];
+            wt->SetGain(mVolume / 100.0);
+        }
+        return result;
+    }
+};
+
+/* FSB3.1 file */
+class DSPADPCMFSB31ImportFileHandle : public DSPADPCMBaseImportFileHandle
+{
+public:
+    DSPADPCMFSB31ImportFileHandle(wxFile *file, const wxString& filename);
+    ~DSPADPCMFSB31ImportFileHandle();
+
+    wxString GetFileDescription() { return _("FSB 3.1 Stereo GameCube DSPADPCM"); }
+    int GetFileUncompressedBytes() { return mHeader.sampleCount * 2 * mHeader.channelCount; }
+    int Import(TrackFactory *trackFactory, Track ***outTracks,
+               int *outNumTracks, Tags *tags);
+
+private:
+    wxFile *mFile;
+    struct fsb31_sample_header mHeader;
+    struct fsb_dspadpcm_channel mCoefs[2];
 };
 
 /**************************************************************************
@@ -296,6 +388,65 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
             return NULL;
         }
         return fh;
+    }
+    else if (!memcmp(magic, "FSB3", 4))
+    {
+        DSPADPCMFSB31ImportFileHandle* fh = new DSPADPCMFSB31ImportFileHandle(file, filename);
+        if (!fh->valid)
+        {
+            delete fh;
+            return NULL;
+        }
+        return fh;
+    }
+    else if (!memcmp(magic, "CSMP", 4))
+    {
+        uint32_t csmpVersion = 0;
+        file->Read(&csmpVersion, 4);
+        csmpVersion = bswapu32(csmpVersion);
+        if (csmpVersion != 1)
+        {
+            delete file;
+            return NULL;
+        }
+
+        float csmpVolume = 100.0;
+        while (true)
+        {
+            if (file->Read(magic, 4) != 4)
+                break;
+
+            uint32_t size = 0;
+            if (file->Read(&size, 4) != 4)
+                break;
+            size = bswapu32(size);
+
+            if (!memcmp(magic, "INFO", 4))
+            {
+                file->Seek(8, wxFromCurrent);
+                uint32_t volumeInt;
+                file->Read(&volumeInt, 4);
+                *((uint32_t*)&csmpVolume) = bswapu32(volumeInt);
+                file->Seek(size-12, wxFromCurrent);
+            }
+            else if (!memcmp(magic, "PAD ", 4) || !memcmp(magic, "NAME", 4))
+            {
+                file->Seek(size, wxFromCurrent);
+                continue;
+            }
+            else if (!memcmp(magic, "DATA", 4))
+            {
+                DSPADPCMCSMPMonoImportFileHandle* fh = new DSPADPCMCSMPMonoImportFileHandle(file, filename, csmpVolume);
+                if (!fh->valid)
+                {
+                    delete fh;
+                    return NULL;
+                }
+                return fh;
+            }
+        }
+        delete file;
+        return NULL;
     }
     file->Seek(0);
 
@@ -370,7 +521,7 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
  **************************************************************************/
 
 DSPADPCMStandardMonoImportFileHandle::DSPADPCMStandardMonoImportFileHandle(wxFile *file, const wxString& filename)
-    :  DSPADPCMBaseImportFileHandle(filename)
+    :  DSPADPCMBaseImportFileHandle(filename), mSampleIndexedLoops(false)
 {
     wxASSERT(file);
     mFile = file;
@@ -399,7 +550,7 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
     unsigned long samplescompleted = 0;
     short hist[2] = {mHeader.hist1, mHeader.hist2};
 
-    TADPCMBlock* adpcmBlock = new TADPCMBlock[4096];
+    TADPCMFrame* adpcmBlock = new TADPCMFrame[4096];
     unsigned blockFrame = 0;
     short pcmBlock[14];
     while (samplescompleted < mHeader.num_samples)
@@ -461,9 +612,14 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
     {
         LabelTrack* lt = trackFactory->NewLabelTrack();
         double sr = mHeader.sample_rate;
-        lt->AddLabel(SelectedRegion(
-                     nibbleidx_to_sampleidx(mHeader.loop_start) / sr,
-                     nibbleidx_to_sampleidx(mHeader.loop_end) / sr), wxT("LOOP"));
+        if (mSampleIndexedLoops)
+            lt->AddLabel(SelectedRegion(
+                         mHeader.loop_start / sr,
+                         mHeader.loop_end / sr), wxT("LOOP"));
+        else
+            lt->AddLabel(SelectedRegion(
+                         nibbleidx_to_sampleidx(mHeader.loop_start) / sr,
+                         nibbleidx_to_sampleidx(mHeader.loop_end) / sr), wxT("LOOP"));
         (*outTracks)[1] = lt;
     }
 
@@ -537,9 +693,9 @@ int DSPADPCMStandardStereoImportFileHandle::Import(TrackFactory *trackFactory,
     short hist[2][2] = {{mHeader[0].hist1, mHeader[0].hist2},
                         {mHeader[1].hist1, mHeader[1].hist2}};
 
-    TADPCMBlock* adpcmBlock[2];
-    adpcmBlock[0] = new TADPCMBlock[4096];
-    adpcmBlock[1] = new TADPCMBlock[4096];
+    TADPCMFrame* adpcmBlock[2];
+    adpcmBlock[0] = new TADPCMFrame[4096];
+    adpcmBlock[1] = new TADPCMFrame[4096];
     unsigned blockFrame[2] = {};
     short pcmBlock[14];
     while (MAX(samplescompleted[0], samplescompleted[1]) <
@@ -693,7 +849,7 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
 
     /* Compute number of full-sized blocks */
     unsigned chanFullblocks = mHeader.chan_byte_count / 0x8f00;
-    TADPCMBlock* adpcmBlock = new TADPCMBlock[4576];
+    TADPCMFrame* adpcmBlock = new TADPCMFrame[4576];
     short pcmBlock[14];
     for (int b=0 ; b<chanFullblocks ; ++b)
     {
@@ -807,6 +963,207 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
 }
 
 DSPADPCMRS03ImportFileHandle::~DSPADPCMRS03ImportFileHandle()
+{
+    if (mFile)
+    {
+        if (mFile->IsOpened())
+            mFile->Close();
+        delete mFile;
+    }
+}
+
+/**************************************************************************
+ * FSB 3.1 Stereo
+ **************************************************************************/
+
+DSPADPCMFSB31ImportFileHandle::DSPADPCMFSB31ImportFileHandle(wxFile *file, const wxString& filename)
+    :  DSPADPCMBaseImportFileHandle(filename)
+{
+    wxASSERT(file);
+    mFile = file;
+    valid = false;
+
+    fsb3_header mainHeader;
+    mFile->Read(&mainHeader, sizeof(mainHeader));
+    if (mainHeader.version != 0x00030001)
+        return;
+    if (mainHeader.sampleCount < 1)
+        return;
+
+    size_t remHeaderSz = mainHeader.headerSize;
+    remHeaderSz -= mFile->Read(&mHeader, sizeof(mHeader));
+    if (!(mHeader.mode & FSOUND_GCADPCM))
+        return;
+
+    for (int c=0 ; c<mHeader.channelCount ; ++c)
+        remHeaderSz -= mFile->Read(&mCoefs[c], sizeof(fsb_dspadpcm_channel));
+    SwapFSBDSPADPCMChannels(mCoefs, mHeader.channelCount);
+
+    if (remHeaderSz)
+        mFile->Seek(remHeaderSz, wxFromCurrent);
+
+    if (mHeader.channelCount <= 2)
+        valid = true;
+}
+
+int DSPADPCMFSB31ImportFileHandle::Import(TrackFactory *trackFactory,
+                                     Track ***outTracks,
+                                     int *outNumTracks,
+                                     Tags *tags)
+{
+    CreateProgress();
+
+    WaveTrack* channels[2];
+    for (int c=0 ; c<mHeader.channelCount ; ++c)
+    {
+        channels[c] = trackFactory->NewWaveTrack(int16Sample, mHeader.defaultFreq);
+        if (mHeader.channelCount == 2)
+            switch (c)
+            {
+            case 0:
+                channels[c]->SetChannel(Track::LeftChannel);
+                break;
+            case 1:
+                channels[c]->SetChannel(Track::RightChannel);
+                break;
+            default:
+                channels[c]->SetChannel(Track::MonoChannel);
+            }
+    }
+    if (mHeader.channelCount == 2)
+        channels[0]->SetLinked(true);
+
+    int updateResult = eProgressSuccess;
+
+    unsigned long samplescompleted = 0;
+    unsigned long samplesremaining = mHeader.sampleCount;
+    short hist[2][2] = {{0, 0},
+                        {0, 0}};
+
+    if (mHeader.channelCount == 2)
+    {
+        short pcmBlock[2][14];
+        unsigned readBlocks = (mHeader.dataSize + 8191) / 8192;
+        unsigned remFrames = (mHeader.dataSize + 15) / 16;
+        TADPCMStereoFrame* adpcmBlock = new TADPCMStereoFrame[512];
+        for (int b=0 ; b<readBlocks ; ++b)
+        {
+            mFile->Read(adpcmBlock, 8192);
+            for (int f=0 ; f<512 && f<remFrames ; ++f)
+            {
+                int s;
+                for (int c=0 ; c<2 ; ++c)
+                {
+                    unsigned char cIdx = (adpcmBlock[f][0][c][0]>>4) & 0xf;
+                    short factor1 = mCoefs[c].coef[cIdx*2];
+                    short factor2 = mCoefs[c].coef[cIdx*2+1];
+                    unsigned char exp = adpcmBlock[f][0][c][0] & 0xf;
+                    for (s=0 ; s<14 && s<samplesremaining ; ++s) {
+                        int sample_byte_idx = s/2+1;
+                        int sample_data = (s&1)?
+                        nibble_to_int[(adpcmBlock[f][sample_byte_idx/2][c][sample_byte_idx%2])&0xf]:
+                        nibble_to_int[(adpcmBlock[f][sample_byte_idx/2][c][sample_byte_idx%2]>>4)&0xf];
+                        sample_data <<= exp;
+                        sample_data <<= 11;
+                        sample_data += 1024;
+                        sample_data +=
+                        factor1 * hist[c][0] +
+                        factor2 * hist[c][1];
+                        sample_data >>= 11;
+                        sample_data = samp_clamp(sample_data);
+                        pcmBlock[c][s] = sample_data;
+                        hist[c][1] = hist[c][0];
+                        hist[c][0] = sample_data;
+                    }
+                    channels[c]->Append((samplePtr)pcmBlock[c], int16Sample, (sampleCount)s);
+                }
+                samplescompleted += s;
+                samplesremaining -= s;
+            }
+            updateResult = mProgress->Update((long long unsigned)samplescompleted,
+                                             (long long unsigned)mHeader.sampleCount);
+            if (updateResult != eProgressSuccess)
+                break;
+            remFrames -= 512;
+        }
+        delete[] adpcmBlock;
+    }
+    else if (mHeader.channelCount == 1)
+    {
+        short pcmBlock[14];
+        unsigned readBlocks = (mHeader.dataSize + 4095) / 4096;
+        unsigned remFrames = (mHeader.dataSize + 7) / 8;
+        TADPCMFrame* adpcmBlock = new TADPCMFrame[512];
+        for (int b=0 ; b<readBlocks ; ++b)
+        {
+            mFile->Read(adpcmBlock, 4096);
+            for (int f=0 ; f<512 && f<remFrames ; ++f)
+            {
+                int s;
+                unsigned char cIdx = (adpcmBlock[f][0]>>4) & 0xf;
+                short factor1 = mCoefs[0].coef[cIdx*2];
+                short factor2 = mCoefs[0].coef[cIdx*2+1];
+                unsigned char exp = adpcmBlock[f][0] & 0xf;
+                for (s=0 ; s<14 && s<samplesremaining ; ++s) {
+                    int sample_byte_idx = s/2+1;
+                    int sample_data = (s&1)?
+                    nibble_to_int[(adpcmBlock[f][sample_byte_idx])&0xf]:
+                    nibble_to_int[(adpcmBlock[f][sample_byte_idx]>>4)&0xf];
+                    sample_data <<= exp;
+                    sample_data <<= 11;
+                    sample_data += 1024;
+                    sample_data +=
+                    factor1 * hist[0][0] +
+                    factor2 * hist[0][1];
+                    sample_data >>= 11;
+                    sample_data = samp_clamp(sample_data);
+                    pcmBlock[s] = sample_data;
+                    hist[0][1] = hist[0][0];
+                    hist[0][0] = sample_data;
+                }
+                channels[0]->Append((samplePtr)pcmBlock, int16Sample, (sampleCount)s);
+                samplescompleted += s;
+                samplesremaining -= s;
+            }
+            updateResult = mProgress->Update((long long unsigned)samplescompleted,
+                                             (long long unsigned)mHeader.sampleCount);
+            if (updateResult != eProgressSuccess)
+                break;
+            remFrames -= 512;
+        }
+        delete[] adpcmBlock;
+    }
+
+    if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
+    {
+        for (int c=0 ; c<2 ; c++)
+            delete channels[c];
+        return updateResult;
+    }
+
+    *outNumTracks = ((mHeader.mode & FSOUND_LOOP_NORMAL) ? mHeader.channelCount + 1 : mHeader.channelCount);
+    *outTracks = new Track *[*outNumTracks];
+    for (int c=0 ; c<mHeader.channelCount ; ++c)
+    {
+        channels[c]->Flush();
+        (*outTracks)[c] = channels[c];
+    }
+
+    /* Add loop label */
+    if (mHeader.mode & FSOUND_LOOP_NORMAL)
+    {
+        LabelTrack* lt = trackFactory->NewLabelTrack();
+        double sr = mHeader.defaultFreq;
+        lt->AddLabel(SelectedRegion(
+                     mHeader.loopStart / sr,
+                     mHeader.loopEnd / sr), wxT("LOOP"));
+        (*outTracks)[mHeader.channelCount] = lt;
+    }
+
+    return updateResult;
+}
+
+DSPADPCMFSB31ImportFileHandle::~DSPADPCMFSB31ImportFileHandle()
 {
     if (mFile)
     {

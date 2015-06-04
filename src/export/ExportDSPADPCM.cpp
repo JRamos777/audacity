@@ -76,7 +76,7 @@ static inline int16_t bswap16(int16_t val)
 #else
 
 #define bswapu32(val) (val)
-#define bswapu16(val) (val)
+#define bswap16(val) (val)
 
 #endif
 
