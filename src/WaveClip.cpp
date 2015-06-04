@@ -499,7 +499,7 @@ namespace {
 inline
 void findCorrection(const sampleCount oldWhere[], int oldLen, int newLen,
          double t0, double rate, double samplesPerPixel,
-         double &oldWhere0, double &denom, int &oldX0, int &oldXLast, double &correction)
+         double &oldWhere0, double &denom, long &oldX0, long &oldXLast, double &correction)
 {
    // Mitigate the accumulation of location errors
    // in copies of copies of ... of caches.
@@ -511,25 +511,35 @@ void findCorrection(const sampleCount oldWhere[], int oldLen, int newLen,
    // Find the length in samples of the old cache.
    denom = oldWhereLast - oldWhere0;
 
-   // Skip unless denom rounds off to at least 1.
-   if (denom >= 0.5)
+   // What sample would go in where[0] with no correction?
+   const double guessWhere0 = t0 * rate;
+
+   // What integer position in the old cache array does that map to?
+   // (even if it is out of bounds)
+   oldX0 = floor(0.5 + oldLen * (guessWhere0 - oldWhere0) / denom);
+   // What sample count would the old cache have put there?
+   const double where0 = oldWhere0 + double(oldX0) * samplesPerPixel;
+   // What integer position in the old cache array does our last column
+   // map to?  (even if out of bounds)
+   oldXLast = floor(0.5 + oldLen * (
+      (where0 + double(newLen) * samplesPerPixel - oldWhere0)
+      / denom
+   ));
+
+   if ( // Skip if old and new are disjoint:
+      oldWhereLast <= guessWhere0 ||
+      guessWhere0 + newLen * samplesPerPixel <= oldWhere0 ||
+      // Skip unless denom rounds off to at least 1.
+      denom < 0.5)
    {
-      // What sample would go in where[0] with no correction?
-      const double guessWhere0 = t0 * rate;
-      // What integer position in the old cache array does that map to?
-      // (even if it is out of bounds)
-      oldX0 = floor(0.5 + oldLen * (guessWhere0 - oldWhere0) / denom);
-      // What sample count would the old cache have put there?
-      const double where0 = oldWhere0 + double(oldX0) * samplesPerPixel;
+      correction = 0.0;
+   }
+   else
+   {
       // What correction is needed to align the new cache with the old?
-      correction = where0 - guessWhere0;
-      wxASSERT(-samplesPerPixel <= correction && correction <= samplesPerPixel);
-      // What integer position in the old cache array does our last column
-      // map to?  (even if out of bounds)
-      oldXLast = floor(0.5 + oldLen * (
-         (where0 + double(newLen) * samplesPerPixel - oldWhere0)
-         / denom
-         ));
+      const double correction0 = where0 - guessWhere0;
+      correction = std::max(-samplesPerPixel, std::min(samplesPerPixel, correction0));
+      wxASSERT(correction == correction0);
    }
 }
 
@@ -599,7 +609,7 @@ bool WaveClip::GetWaveDisplay(WaveDisplay &display, double t0,
 
    double oldWhere0 = 0;
    double denom = 0;
-   int oldX0 = 0, oldXLast = 0;
+   long oldX0 = 0, oldXLast = 0;
    double correction = 0.0;
    if (match &&
        oldCache->len > 0) {
@@ -832,6 +842,25 @@ void RecreateWindow(
 }
 }
 
+void WaveClip::ComputeSpectrogramGainFactors(int fftLen, int frequencyGain, std::vector<float> &gainFactors)
+{
+   if (frequencyGain > 0) {
+      // Compute a frequency-dependent gain factor
+      // scaled such that 1000 Hz gets a gain of 0dB
+
+      // This is the reciprocal of the bin number of 1000 Hz:
+      const double factor = ((double)mRate / (double)fftLen) / 1000.0;
+
+      const int half = fftLen / 2;
+      gainFactors.reserve(half);
+      // Don't take logarithm of zero!  Let bin 0 replicate the gain factor for bin 1.
+      gainFactors.push_back(frequencyGain*log10(factor));
+      for (sampleCount x = 1; x < half; x++) {
+         gainFactors.push_back(frequencyGain*log10(factor * x));
+      }
+   }
+}
+
 bool WaveClip::GetSpectrogram(WaveTrackCache &waveTrackCache,
                               float *freq, sampleCount *where,
                               int numPixels,
@@ -842,7 +871,7 @@ bool WaveClip::GetSpectrogram(WaveTrackCache &waveTrackCache,
    int maxFreq = gPrefs->Read(wxT("/Spectrum/MaxFreq"), 8000L);
    int range = gPrefs->Read(wxT("/Spectrum/Range"), 80L);
    int gain = gPrefs->Read(wxT("/Spectrum/Gain"), 20L);
-   int frequencygain = gPrefs->Read(wxT("/Spectrum/FrequencyGain"), 0L);
+   int frequencyGain = gPrefs->Read(wxT("/Spectrum/FrequencyGain"), 0L);
    int windowType;
    int windowSize = gPrefs->Read(wxT("/Spectrum/FFTSize"), 256);
 #ifdef EXPERIMENTAL_FFT_SKIP_POINTS
@@ -887,7 +916,7 @@ bool WaveClip::GetSpectrogram(WaveTrackCache &waveTrackCache,
       mSpecCache->windowTypeOld == windowType &&
       mSpecCache->windowSizeOld == windowSize &&
       mSpecCache->zeroPaddingFactorOld == zeroPaddingFactor &&
-      mSpecCache->frequencyGainOld == frequencygain &&
+      mSpecCache->frequencyGainOld == frequencyGain &&
 #ifdef EXPERIMENTAL_FFT_SKIP_POINTS
       mSpecCache->fftSkipPointsOld == fftSkipPoints &&
 #endif //EXPERIMENTAL_FFT_SKIP_POINTS
@@ -918,7 +947,7 @@ bool WaveClip::GetSpectrogram(WaveTrackCache &waveTrackCache,
    // reuse and finding corrections
    double oldWhere0 = 0;
    double denom = 0;
-   int oldX0 = 0, oldXLast = 0;
+   long oldX0 = 0, oldXLast = 0;
    double correction = 0.0;
 
    if (match &&
@@ -976,18 +1005,10 @@ bool WaveClip::GetSpectrogram(WaveTrackCache &waveTrackCache,
    mSpecCache->windowTypeOld = windowType;
    mSpecCache->windowSizeOld = windowSize;
    mSpecCache->zeroPaddingFactorOld = zeroPaddingFactor;
-   mSpecCache->frequencyGainOld = frequencygain;
+   mSpecCache->frequencyGainOld = frequencyGain;
 
-   float *gainfactor = NULL;
-   if(frequencygain > 0) {
-      // Compute a frequency-dependant gain factor
-      // scaled such that 1000 Hz gets a gain of 0dB
-      double factor = 0.001*(double)mRate/(double)windowSize;
-      gainfactor = new float[half];
-      for(sampleCount x = 0; x < half; x++) {
-         gainfactor[x] = frequencygain*log10(factor * x);
-      }
-   }
+   std::vector<float> gainFactors;
+   ComputeSpectrogramGainFactors(fftLen, frequencyGain, gainFactors);
 
    for (sampleCount x = 0; x < mSpecCache->len; x++)
       if (recalc[x]) {
@@ -1070,16 +1091,14 @@ bool WaveClip::GetSpectrogram(WaveTrackCache &waveTrackCache,
                            mRate, &mSpecCache->freq[half * x],
                            autocorrelation, windowType);
 #endif // EXPERIMENTAL_USE_REALFFTF
-           if(gainfactor) {
-              // Apply a frequency-dependant gain factor
+           if (!gainFactors.empty()) {
+              // Apply a frequency-dependent gain factor
               for(i=0; i<half; i++)
-                 mSpecCache->freq[half * x + i] += gainfactor[i];
+                 mSpecCache->freq[half * x + i] += gainFactors[i];
            }
          }
       }
 
-   if(gainfactor)
-      delete[] gainfactor;
    delete[]buffer;
    delete[]recalc;
    delete oldCache;
