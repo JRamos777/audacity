@@ -735,8 +735,7 @@ static const struct SLayouts
 {
     DSPADPCM_STD,
     wxT("Standard Mono"),
-    wxT("Standard mono .dsp layout from Nintendo's DSPADPCM.EXE\n\n"
-        "Stereo projects export a L/R pair")
+    wxT("Standard mono .dsp layout from Nintendo's DSPADPCM.EXE\n\nStereo projects export a L/R pair")
 },
 {
     DSPADPCM_RS03,
