@@ -242,6 +242,40 @@ static void SwapRASTrackMeta(ras_track_meta* h)
         h->unknowns2[i] = bswapu32(h->unknowns2[i]);
 }
 
+struct dkctf_labl
+{
+    uint32_t unk0[2];
+    float unkfloat1;
+    uint32_t unk1[5];
+    float loopStartSecs;
+    uint32_t unk2;
+    float unkfloat2;
+    uint32_t unk3;
+    float loopStartSecs2;
+    uint32_t unk4[3];
+    float loopEndSecs;
+    uint32_t unk5[3];
+};
+
+static void SwapDkctfLABL(dkctf_labl* h)
+{
+    for (int i=0 ; i<2 ; ++i)
+        h->unk0[i] = bswapu32(h->unk0[i]);
+    *((uint32_t*)&h->unkfloat1) = bswapu32(*((uint32_t*)&h->unkfloat1));
+    for (int i=0 ; i<5 ; ++i)
+        h->unk1[i] = bswapu32(h->unk1[i]);
+    *((uint32_t*)&h->loopStartSecs) = bswapu32(*((uint32_t*)&h->loopStartSecs));
+    h->unk2 = bswapu32(h->unk2);
+    *((uint32_t*)&h->unkfloat2) = bswapu32(*((uint32_t*)&h->unkfloat2));
+    h->unk3 = bswapu32(h->unk3);
+    *((uint32_t*)&h->loopStartSecs2) = bswapu32(*((uint32_t*)&h->loopStartSecs2));
+    for (int i=0 ; i<3 ; ++i)
+        h->unk4[i] = bswapu32(h->unk4[i]);
+    *((uint32_t*)&h->loopEndSecs) = bswapu32(*((uint32_t*)&h->loopEndSecs));
+    for (int i=0 ; i<3 ; ++i)
+        h->unk5[i] = bswapu32(h->unk5[i]);
+}
+
 typedef unsigned char TADPCMFrame[8];
 typedef unsigned char TADPCMStereoFrame[4][2][2];
 
@@ -1110,31 +1144,47 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
     wxFile f[2];   // will be closed when it goes out of scope
     if (numChannels > 1)
     {
-        wxString fileName;
-        std::size_t dotPos;
-
-        fileName = fName;
-        dotPos = fileName.rfind('.');
-        if (dotPos > 0)
-            fileName.insert(dotPos, 1, 'L');
-        else
-            fileName += 'L';
-        if (!f[0].Open(fileName, wxFile::write)) {
-            wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
-                                          fileName.c_str()));
-            return false;
+        if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF)
+        {
+            if (!f[0].Open(fName, wxFile::write)) {
+                wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                              fName.c_str()));
+                return false;
+            }
+            if (!f[1].Open(fName, wxFile::write)) {
+                wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                              fName.c_str()));
+                return false;
+            }
         }
-
-        fileName = fName;
-        dotPos = fileName.rfind('.');
-        if (dotPos > 0)
-            fileName.insert(dotPos, 1, 'R');
         else
-            fileName += 'R';
-        if (!f[1].Open(fileName, wxFile::write)) {
-            wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
-                                          fileName.c_str()));
-            return false;
+        {
+            wxString fileName;
+            std::size_t dotPos;
+
+            fileName = fName;
+            dotPos = fileName.rfind('.');
+            if (dotPos > 0)
+                fileName.insert(dotPos, 1, 'L');
+            else
+                fileName += 'L';
+            if (!f[0].Open(fileName, wxFile::write)) {
+                wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                              fileName.c_str()));
+                return false;
+            }
+
+            fileName = fName;
+            dotPos = fileName.rfind('.');
+            if (dotPos > 0)
+                fileName.insert(dotPos, 1, 'R');
+            else
+                fileName += 'R';
+            if (!f[1].Open(fileName, wxFile::write)) {
+                wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                              fileName.c_str()));
+                return false;
+            }
         }
     }
     else
@@ -1236,19 +1286,39 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             }
             else if (csmpLayout == DSPADPCM_CSMP_DKCTF)
             {
-                uint32_t dspSz = sizeof(dspadpcm_header) + packetCount * 8;
-                f[c].Write("RFRM\x00\x00\x00\x00", 8);
-                uint32_t resourceSz = bswapu32(dspSz + 160);
-                f[c].Write(&resourceSz, 4);
-                f[c].Write("\x00\x00\x00\x00\x00\x00\x00\x00""CSMP""\x00\x00\x00\x0A\x00\x00\x00\x0A", 20);
-                f[c].Write("LABL""\x00\x00\x00\x00\x00\x00\x00\x50\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
-                           "\x42\xD8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x04\x41\xF8\xE3\x85\x00\x00\x00\x01"
-                           "\x42\xD8\x00\x00\x00\x00\x00\x00\x41\xF8\xE3\x85\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x04\x43\x4A\x35\x81\x00\x00\x00\x00"
-                           "\x00\x00\x00\x00\x00\x00\x00\x13""FMTA""\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-                           "\x02\x00\x00\x00\x03""DATA""\x00\x00\x00\x00", 141);
-                uint32_t dataSz = bswapu32(dspSz + 3);
-                f[c].Write(&dataSz, 4);
-                f[c].Write("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 15);
+                if (c == 0)
+                {
+                    uint32_t dspSz = sizeof(dspadpcm_header) + packetCount * 8;
+                    f[0].Write("RFRM\x00\x00\x00\x00", 8);
+                    uint32_t resourceSz = bswapu32(dspSz * numChannels + 160);
+                    f[0].Write(&resourceSz, 4);
+                    f[0].Write("\x00\x00\x00\x00\x00\x00\x00\x00""CSMP""\x00\x00\x00\x0A\x00\x00\x00\x0A", 20);
+                    f[0].Write("LABL""\x00\x00\x00\x00\x00\x00\x00\x50\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 24);
+                    dkctf_labl labl = {};
+                    labl.unk0[1] = 1;
+                    labl.unkfloat1 = 108.0;
+                    labl.unk1[2] = 2;
+                    labl.unk1[4] = 4;
+                    labl.loopStartSecs = loopStartSample / rate;
+                    labl.unk2 = 1;
+                    labl.unkfloat2 = 108.0;
+                    labl.loopStartSecs2 = labl.loopStartSecs;
+                    labl.unk4[0] = 2;
+                    labl.unk4[2] = 4;
+                    labl.loopEndSecs = loopEndSample / rate;
+                    labl.unk5[2] = 19;
+                    SwapDkctfLABL(&labl);
+                    f[0].Write(&labl, sizeof(labl));
+                    f[0].Write("FMTA""\x00\x00\x00\x00\x00\x00\x00\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 24);
+                    char chanCount = numChannels;
+                    f[0].Write(&chanCount, 1);
+                    f[0].Write("\x00\x00\x00\x03""DATA""\x00\x00\x00\x00", 12);
+                    uint32_t dataSz = bswapu32(dspSz * numChannels + 3);
+                    f[0].Write(&dataSz, 4);
+                    f[0].Write("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 15);
+                    if (numChannels == 2)
+                        f[1].Seek(f[0].Tell() + dspSz);
+                }
             }
         }
 
@@ -1270,6 +1340,8 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             header.loop_start_nibble = bswapu32(loopStartNibble);
             header.loop_end_nibble = bswapu32(loopEndNibble);
         }
+        if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF) /* DKCTF uses this 'zero' field for channel count */
+            header.zero = bswapu32(numChannels);
         for (int i=0 ; i<16 ; ++i)
             header.coef[i] = bswap16(coefs[i]);
         f[c].Write(&header, sizeof(header));

@@ -457,7 +457,8 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
     wxFile* rfile = NULL;
 
     wxFile* file = new wxFile(filename);
-    if (!file->IsOpened()) {
+    if (!file->IsOpened())
+    {
         delete file;
         return NULL;
     }
@@ -468,7 +469,8 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
     file->Read(magic, 4);
     if (!memcmp(magic, "RS\x00\x03", 4))
     {
-        DSPADPCMRS03ImportFileHandle* fh = new DSPADPCMRS03ImportFileHandle(file, filename);
+        DSPADPCMRS03ImportFileHandle* fh =
+        new DSPADPCMRS03ImportFileHandle(file, filename);
         if (!fh->valid)
         {
             delete fh;
@@ -478,7 +480,8 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
     }
     else if (!memcmp(magic, "FSB3", 4))
     {
-        DSPADPCMFSB31ImportFileHandle* fh = new DSPADPCMFSB31ImportFileHandle(file, filename);
+        DSPADPCMFSB31ImportFileHandle* fh =
+        new DSPADPCMFSB31ImportFileHandle(file, filename);
         if (!fh->valid)
         {
             delete fh;
@@ -518,7 +521,8 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
             }
             else if (!memcmp(magic, "DATA", 4))
             {
-                DSPADPCMCSMPMonoImportFileHandle* fh = new DSPADPCMCSMPMonoImportFileHandle(file, filename, csmpVolume, true);
+                DSPADPCMCSMPMonoImportFileHandle* fh =
+                new DSPADPCMCSMPMonoImportFileHandle(file, filename, csmpVolume, true);
                 if (!fh->valid)
                 {
                     delete fh;
@@ -541,6 +545,7 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
         if (!memcmp(magic, "CSMP", 4))
         {
             file->Seek(8, wxFromCurrent);
+            char chanCount = 0;
             uint32_t fmtAlign = 0;
             while (true)
             {
@@ -555,7 +560,7 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
 
                 if (!memcmp(magic, "FMTA", 4))
                 {
-                    file->Seek(1, wxFromCurrent);
+                    file->Read(&chanCount, 1);
                     file->Read(&fmtAlign, 4);
                     fmtAlign = bswapu32(fmtAlign);
                     file->Seek(size-5, wxFromCurrent);
@@ -563,13 +568,37 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
                 else if (!memcmp(magic, "DATA", 4))
                 {
                     file->Seek(fmtAlign, wxFromCurrent);
-                    DSPADPCMCSMPMonoImportFileHandle* fh = new DSPADPCMCSMPMonoImportFileHandle(file, filename, 100.0, false);
-                    if (!fh->valid)
+                    if (chanCount == 1)
                     {
-                        delete fh;
-                        return NULL;
+                        DSPADPCMCSMPMonoImportFileHandle* fh =
+                        new DSPADPCMCSMPMonoImportFileHandle(file, filename, 100.0, false);
+                        if (!fh->valid)
+                        {
+                            delete fh;
+                            return NULL;
+                        }
+                        return fh;
                     }
-                    return fh;
+                    else if (chanCount == 2)
+                    {
+                        wxFileOffset roff = file->Tell() + (size - fmtAlign) / 2;
+                        wxFile* rfile = new wxFile(filename);
+                        if (!rfile->IsOpened())
+                        {
+                            delete rfile;
+                            break;
+                        }
+                        rfile->Seek(roff);
+                        DSPADPCMStandardStereoImportFileHandle* fh =
+                        new DSPADPCMStandardStereoImportFileHandle(file, rfile, filename);
+                        if (!fh->valid)
+                        {
+                            delete fh;
+                            return NULL;
+                        }
+                        return fh;
+                    }
+                    break;
                 }
                 else
                 {
@@ -582,7 +611,8 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
     }
     else if (!memcmp(magic, "RAS_", 4))
     {
-        DSPADPCMRASImportFileHandle* fh = new DSPADPCMRASImportFileHandle(file, filename);
+        DSPADPCMRASImportFileHandle* fh =
+        new DSPADPCMRASImportFileHandle(file, filename);
         if (!fh->valid)
         {
             delete fh;
@@ -594,7 +624,7 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
 
     /* Assume standard mono .dsp (check for stereo pair) */
     std::size_t dotpos = filename.rfind('.');
-    if (dotpos < 0 )
+    if (dotpos == wxStringBase::npos)
         dotpos = filename.size();
 
     if (filename[dotpos-1] == 'L' ||
