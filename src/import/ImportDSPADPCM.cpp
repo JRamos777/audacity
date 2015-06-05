@@ -189,6 +189,74 @@ static void SwapFSBDSPADPCMChannels(struct fsb_dspadpcm_channel* h, int chanCoun
             h[c].coef[co] = bswap16(h[c].coef[co]);
 }
 
+/* RAS header after magic (DKC Tropical Freeze) */
+struct ras_header
+{
+    uint32_t chanCount1;
+    uint32_t chanCount2;
+    uint32_t numSamples;
+    uint32_t metaDataFlag;
+    uint32_t sampleRate;
+    uint32_t dataOffset;
+    uint32_t dataSize;
+    uint32_t blockSize;
+    uint32_t numBlocks;
+    uint32_t startSample;
+    uint32_t lastSampleOfLastBlock;
+    uint32_t loopStartBlock;
+    uint32_t loopStartSample;
+    uint32_t loopEndBlock;
+    uint32_t loopEndSample;
+};
+
+static void SwapRASHeader(ras_header* h)
+{
+    h->chanCount1 = bswapu32(h->chanCount1);
+    h->chanCount2 = bswapu32(h->chanCount2);
+    h->numSamples = bswapu32(h->numSamples);
+    h->metaDataFlag = bswapu32(h->metaDataFlag);
+    h->sampleRate = bswapu32(h->sampleRate);
+    h->dataOffset = bswapu32(h->dataOffset);
+    h->dataSize = bswapu32(h->dataSize);
+    h->blockSize = bswapu32(h->blockSize);
+    h->numBlocks = bswapu32(h->numBlocks);
+    h->startSample = bswapu32(h->startSample);
+    h->lastSampleOfLastBlock = bswapu32(h->lastSampleOfLastBlock);
+    h->loopStartBlock = bswapu32(h->loopStartBlock);
+    h->loopStartSample = bswapu32(h->loopStartSample);
+    h->loopEndBlock = bswapu32(h->loopEndBlock);
+    h->loopEndSample = bswapu32(h->loopEndSample);
+}
+
+struct ras_dspadpcm_channel
+{
+    int16_t coefs[16];
+    uint32_t unknowns[4];
+};
+
+static void SwapRASChannel(ras_dspadpcm_channel* h)
+{
+    for (int i=0 ; i<16 ; ++i)
+        h->coefs[i] = bswap16(h->coefs[i]);
+}
+
+struct ras_track_meta
+{
+    uint32_t unknown1;
+    uint32_t bpmFlag;
+    float bpm;
+    uint32_t unknowns2[5];
+};
+
+static void SwapRASTrackMeta(ras_track_meta* h)
+{
+    h->unknown1 = bswapu32(h->unknown1);
+    h->bpmFlag = bswapu32(h->bpmFlag);
+    *((uint32_t*)&h->bpm) = bswapu32(*((uint32_t*)&h->bpm));
+    for (int i=0 ; i<5 ; ++i)
+        h->unknowns2[i] = bswapu32(h->unknowns2[i]);
+}
+
 static const int nibble_to_int[16] = {0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1};
 
 static inline short samp_clamp(int val) {
@@ -219,7 +287,8 @@ static const wxChar *exts[] =
     wxT("dsp"),
     wxT("fsb"),
     wxT("strm"),
-    wxT("csmp")
+    wxT("csmp"),
+    wxT("ras")
 };
 
 /**************************************************************************
@@ -231,10 +300,9 @@ class DSPADPCMImportPlugin : public ImportPlugin
 public:
     DSPADPCMImportPlugin()
     : ImportPlugin(wxArrayString(WXSIZEOF(exts), exts))
-    {
-    }
+    {}
 
-    ~DSPADPCMImportPlugin() { }
+    ~DSPADPCMImportPlugin() {}
 
     wxString GetPluginStringID() { return wxT("gc-dspadpcm"); }
     wxString GetPluginFormatDescription() { return _("Nintendo GameCube DSPADPCM"); }
@@ -322,10 +390,10 @@ class DSPADPCMCSMPMonoImportFileHandle : public DSPADPCMStandardMonoImportFileHa
 {
     float mVolume;
 public:
-    DSPADPCMCSMPMonoImportFileHandle(wxFile *file, const wxString& filename, float volume)
+    DSPADPCMCSMPMonoImportFileHandle(wxFile *file, const wxString& filename, float volume, bool sampleLoops)
     : DSPADPCMStandardMonoImportFileHandle(file, filename), mVolume(volume)
     {
-        mSampleIndexedLoops = true;
+        mSampleIndexedLoops = sampleLoops;
     }
 
     wxString GetFileDescription() { return _("Mono CSMP DSPADPCM"); }
@@ -358,6 +426,25 @@ private:
     wxFile *mFile;
     struct fsb31_sample_header mHeader;
     struct fsb_dspadpcm_channel mCoefs[2];
+};
+
+/* RAS file (DKC Tropical Freeze) */
+class DSPADPCMRASImportFileHandle : public DSPADPCMBaseImportFileHandle
+{
+public:
+    DSPADPCMRASImportFileHandle(wxFile *file, const wxString& filename);
+    ~DSPADPCMRASImportFileHandle();
+
+    wxString GetFileDescription() { return _("RAS Stereo GameCube DSPADPCM"); }
+    int GetFileUncompressedBytes() { return mHeader.numSamples * 2 * mHeader.chanCount1; }
+    int Import(TrackFactory *trackFactory, Track ***outTracks,
+               int *outNumTracks, Tags *tags);
+
+private:
+    wxFile *mFile;
+    struct ras_header mHeader;
+    struct ras_dspadpcm_channel mCoefs[2];
+    struct ras_track_meta mMeta;
 };
 
 /**************************************************************************
@@ -429,14 +516,9 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
                 *((uint32_t*)&csmpVolume) = bswapu32(volumeInt);
                 file->Seek(size-12, wxFromCurrent);
             }
-            else if (!memcmp(magic, "PAD ", 4) || !memcmp(magic, "NAME", 4))
-            {
-                file->Seek(size, wxFromCurrent);
-                continue;
-            }
             else if (!memcmp(magic, "DATA", 4))
             {
-                DSPADPCMCSMPMonoImportFileHandle* fh = new DSPADPCMCSMPMonoImportFileHandle(file, filename, csmpVolume);
+                DSPADPCMCSMPMonoImportFileHandle* fh = new DSPADPCMCSMPMonoImportFileHandle(file, filename, csmpVolume, true);
                 if (!fh->valid)
                 {
                     delete fh;
@@ -444,9 +526,69 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(wxString filename)
                 }
                 return fh;
             }
+            else
+            {
+                file->Seek(size, wxFromCurrent);
+            }
         }
         delete file;
         return NULL;
+    }
+    else if (!memcmp(magic, "RFRM", 4))
+    {
+        file->Seek(16, wxFromCurrent);
+        file->Read(magic, 4);
+        if (!memcmp(magic, "CSMP", 4))
+        {
+            file->Seek(8, wxFromCurrent);
+            uint32_t fmtAlign = 0;
+            while (true)
+            {
+                if (file->Read(magic, 4) != 4)
+                    break;
+                file->Seek(4, wxFromCurrent);
+                uint32_t size = 0;
+                if (file->Read(&size, 4) != 4)
+                    break;
+                size = bswapu32(size);
+                file->Seek(12, wxFromCurrent);
+
+                if (!memcmp(magic, "FMTA", 4))
+                {
+                    file->Seek(1, wxFromCurrent);
+                    file->Read(&fmtAlign, 4);
+                    fmtAlign = bswapu32(fmtAlign);
+                    file->Seek(size-5, wxFromCurrent);
+                }
+                else if (!memcmp(magic, "DATA", 4))
+                {
+                    file->Seek(fmtAlign, wxFromCurrent);
+                    DSPADPCMCSMPMonoImportFileHandle* fh = new DSPADPCMCSMPMonoImportFileHandle(file, filename, 100.0, false);
+                    if (!fh->valid)
+                    {
+                        delete fh;
+                        return NULL;
+                    }
+                    return fh;
+                }
+                else
+                {
+                    file->Seek(size, wxFromCurrent);
+                }
+            }
+        }
+        delete file;
+        return NULL;
+    }
+    else if (!memcmp(magic, "RAS_", 4))
+    {
+        DSPADPCMRASImportFileHandle* fh = new DSPADPCMRASImportFileHandle(file, filename);
+        if (!fh->valid)
+        {
+            delete fh;
+            return NULL;
+        }
+        return fh;
     }
     file->Seek(0);
 
@@ -1164,6 +1306,159 @@ int DSPADPCMFSB31ImportFileHandle::Import(TrackFactory *trackFactory,
 }
 
 DSPADPCMFSB31ImportFileHandle::~DSPADPCMFSB31ImportFileHandle()
+{
+    if (mFile)
+    {
+        if (mFile->IsOpened())
+            mFile->Close();
+        delete mFile;
+    }
+}
+
+/**************************************************************************
+ * RAS Stereo
+ **************************************************************************/
+
+DSPADPCMRASImportFileHandle::DSPADPCMRASImportFileHandle(wxFile *file, const wxString& filename)
+    :  DSPADPCMBaseImportFileHandle(filename)
+{
+    wxASSERT(file);
+    mFile = file;
+    valid = false;
+
+    mFile->Read(&mHeader, sizeof(mHeader));
+    SwapRASHeader(&mHeader);
+
+    for (int c=0 ; c<mHeader.chanCount1 ; ++c)
+    {
+        mFile->Read(&mCoefs[c], sizeof(ras_dspadpcm_channel));
+        SwapRASChannel(&mCoefs[c]);
+    }
+
+    memset(&mMeta, 0, sizeof(ras_track_meta));
+    if (mHeader.metaDataFlag)
+    {
+        mFile->Read(&mMeta, sizeof(ras_track_meta));
+        SwapRASTrackMeta(&mMeta);
+    }
+
+    mFile->Seek(mHeader.dataOffset);
+    if (mHeader.chanCount1 == 2)
+        valid = true;
+}
+
+int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
+                                     Track ***outTracks,
+                                     int *outNumTracks,
+                                     Tags *tags)
+{
+    CreateProgress();
+
+    WaveTrack* channels[2];
+    for (int c=0 ; c<mHeader.chanCount1 ; ++c)
+    {
+        channels[c] = trackFactory->NewWaveTrack(int16Sample, mHeader.sampleRate);
+        if (mHeader.chanCount1 == 2)
+            switch (c)
+            {
+            case 0:
+                channels[c]->SetChannel(Track::LeftChannel);
+                break;
+            case 1:
+                channels[c]->SetChannel(Track::RightChannel);
+                break;
+            default:
+                channels[c]->SetChannel(Track::MonoChannel);
+            }
+    }
+    if (mHeader.chanCount1 == 2)
+        channels[0]->SetLinked(true);
+
+    int updateResult = eProgressSuccess;
+
+    unsigned long samplescompleted[2] = {};
+    unsigned long samplesremaining[2] = {mHeader.numSamples, mHeader.numSamples};
+    short hist[2][2] = {{0, 0},
+                        {0, 0}};
+
+    unsigned framesPerBlock = mHeader.blockSize / 8;
+    TADPCMFrame* adpcmBlock = new TADPCMFrame[framesPerBlock];
+    for (int b=0 ; b<mHeader.numBlocks ; ++b)
+    {
+        for (int c=0 ; c<mHeader.chanCount1 ; ++c)
+        {
+            mFile->Read(adpcmBlock, mHeader.blockSize);
+            for (int f=0 ; f<framesPerBlock ; ++f)
+            {
+                short pcmBlock[14];
+                unsigned char cIdx = (adpcmBlock[f][0]>>4) & 0xf;
+                short factor1 = mCoefs[c].coefs[cIdx*2];
+                short factor2 = mCoefs[c].coefs[cIdx*2+1];
+                unsigned char exp = adpcmBlock[f][0] & 0xf;
+                int s;
+                for (s=0 ; s<14 && s<samplesremaining[c] ; ++s) {
+                    int sample_byte_idx = s/2+1;
+                    int sample_data = (s&1)?
+                    nibble_to_int[(adpcmBlock[f][sample_byte_idx])&0xf]:
+                    nibble_to_int[(adpcmBlock[f][sample_byte_idx]>>4)&0xf];
+                    sample_data <<= exp;
+                    sample_data <<= 11;
+                    sample_data += 1024;
+                    sample_data +=
+                    factor1 * hist[c][0] +
+                    factor2 * hist[c][1];
+                    sample_data >>= 11;
+                    sample_data = samp_clamp(sample_data);
+                    pcmBlock[s] = sample_data;
+                    hist[c][1] = hist[c][0];
+                    hist[c][0] = sample_data;
+                }
+                channels[c]->Append((samplePtr)pcmBlock, int16Sample, (sampleCount)s);
+                samplescompleted[c] += s;
+                samplesremaining[c] -= s;
+            }
+        }
+        updateResult = mProgress->Update((long long unsigned)samplescompleted[0],
+                                         (long long unsigned)mHeader.numSamples);
+        if (updateResult != eProgressSuccess)
+            break;
+    }
+    delete[] adpcmBlock;
+
+    if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
+    {
+        for (int c=0 ; c<2 ; c++)
+            delete channels[c];
+        return updateResult;
+    }
+
+    *outNumTracks = ((mHeader.loopEndBlock || mHeader.loopEndSample) ? mHeader.chanCount1 + 1 : mHeader.chanCount1);
+    *outTracks = new Track *[*outNumTracks];
+    for (int c=0 ; c<mHeader.chanCount1 ; ++c)
+    {
+        channels[c]->Flush();
+        (*outTracks)[c] = channels[c];
+    }
+
+    /* Add loop label */
+    if (mHeader.loopEndBlock || mHeader.loopEndSample)
+    {
+        LabelTrack* lt = trackFactory->NewLabelTrack();
+        double sr = mHeader.sampleRate;
+        lt->AddLabel(SelectedRegion(
+                     (mHeader.loopStartBlock * framesPerBlock * 14 + mHeader.loopStartSample) / sr,
+                     (mHeader.loopEndBlock * framesPerBlock * 14 + mHeader.loopEndSample) / sr), wxT("LOOP"));
+        (*outTracks)[mHeader.chanCount1] = lt;
+    }
+
+    /* Add BPM metadata */
+    if (mMeta.bpmFlag)
+        tags->SetTag(wxT("BPM"), wxString::Format(wxT("%g"), mMeta.bpm));
+
+    return updateResult;
+}
+
+DSPADPCMRASImportFileHandle::~DSPADPCMRASImportFileHandle()
 {
     if (mFile)
     {
