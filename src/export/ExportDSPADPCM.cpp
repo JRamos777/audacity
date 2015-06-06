@@ -2401,7 +2401,7 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
     struct ras_header header = {};
     header.chanCount1 = numChannels;
     header.chanCount2 = numChannels;
-    header.numSamples = numSamples;
+    header.numSamples = numSamples - startSample;
     header.metaDataFlag = tags->HasTag(wxT("BPM")) ? 2 : 0;
     header.sampleRate = sampleRate;
     header.dataOffset = header.metaDataFlag ? 192 : 160;
@@ -2413,9 +2413,9 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
     if (loops)
     {
         header.loopStartBlock = loopStartSample / 14 / 4096;
-        header.loopStartSample = loopStartSample - header.loopStartBlock * 4096 * 14 + startSample;
+        header.loopStartSample = loopStartSample - header.loopStartBlock * 4096 * 14;
         header.loopEndBlock = loopEndSample / 14 / 4096;
-        header.loopEndSample = loopEndSample - header.loopEndBlock * 4096 * 14 + startSample;
+        header.loopEndSample = loopEndSample - header.loopEndBlock * 4096 * 14;
     }
     SwapRASHeader(&header);
     fs.Write("RAS_", 4);

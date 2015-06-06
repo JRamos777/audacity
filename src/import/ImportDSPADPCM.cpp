@@ -438,7 +438,7 @@ public:
     ~DSPADPCMRASImportFileHandle();
 
     wxString GetFileDescription() { return _("RAS Stereo GameCube DSPADPCM"); }
-    int GetFileUncompressedBytes() { return mHeader.numSamples * 2 * mHeader.chanCount1; }
+    int GetFileUncompressedBytes() { return (mHeader.startSample + mHeader.numSamples) * 2 * mHeader.chanCount1; }
     int Import(TrackFactory *trackFactory, Track ***outTracks,
                int *outNumTracks, Tags *tags);
 
@@ -1466,8 +1466,9 @@ int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
 
     int updateResult = eProgressSuccess;
 
+    unsigned numSamples = mHeader.startSample + mHeader.numSamples;
     unsigned long samplescompleted[2] = {};
-    unsigned long samplesremaining[2] = {mHeader.numSamples, mHeader.numSamples};
+    unsigned long samplesremaining[2] = {numSamples, numSamples};
     short hist[2][2] = {{0, 0},
                         {0, 0}};
 
@@ -1509,7 +1510,7 @@ int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
             }
         }
         updateResult = mProgress->Update((long long unsigned)samplescompleted[0],
-                                         (long long unsigned)mHeader.numSamples);
+                                         (long long unsigned)numSamples);
         if (updateResult != eProgressSuccess)
             break;
     }
@@ -1538,8 +1539,8 @@ int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
         double startPoint = mHeader.startSample / sr;
         lt->AddLabel(SelectedRegion(startPoint, startPoint), wxT("START"));
         lt->AddLabel(SelectedRegion(
-                     (mHeader.loopStartBlock * framesPerBlock * 14 + mHeader.loopStartSample - mHeader.startSample) / sr,
-                     (mHeader.loopEndBlock * framesPerBlock * 14 + mHeader.loopEndSample - mHeader.startSample) / sr),
+                     (mHeader.loopStartBlock * framesPerBlock * 14 + mHeader.loopStartSample) / sr,
+                     (mHeader.loopEndBlock * framesPerBlock * 14 + mHeader.loopEndSample) / sr),
                      wxT("LOOP"));
         (*outTracks)[mHeader.chanCount1] = lt;
     }
