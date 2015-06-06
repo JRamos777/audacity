@@ -2354,10 +2354,11 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
         return eProgressFailed;
     }
 
-    /* See if project contains loop region */
+    /* See if project contains loop region and start point */
     TrackListOfKindIterator labelIt(Track::Label);
     const LabelTrack* labelTrack;
     bool loops = false;
+    uint32_t startSample = 0;
     uint32_t loopStartSample = 0;
     uint32_t loopEndSample = 0;
     for (labelTrack = (LabelTrack*)labelIt.First(tracks);
@@ -2369,14 +2370,19 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
             const LabelStruct* label = labelTrack->GetLabel(l);
             if (!label->title.CmpNoCase(wxT("loop")))
             {
+                if (loops)
+                    continue;
                 loops = true;
                 loopStartSample = label->getT0() * sampleRate;
                 loopEndSample = label->getT1() * sampleRate;
-                break;
+            }
+            else if (!label->title.CmpNoCase(wxT("start")))
+            {
+                if (startSample)
+                    continue;
+                startSample = label->getT0() * sampleRate;
             }
         }
-        if (loops)
-            break;
     }
 
     short* mixed[2];
@@ -2402,14 +2408,14 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
     header.dataSize = chanBlocks * 32768 * numChannels;
     header.blockSize = 32768;
     header.numBlocks = chanBlocks;
-    header.startSample = 0;
+    header.startSample = startSample;
     header.lastSampleOfLastBlock = numSamples - (chanBlocks-1) * 4096 * 14;
     if (loops)
     {
         header.loopStartBlock = loopStartSample / 14 / 4096;
-        header.loopStartSample = loopStartSample - header.loopStartBlock * 4096 * 14;
+        header.loopStartSample = loopStartSample - header.loopStartBlock * 4096 * 14 + startSample;
         header.loopEndBlock = loopEndSample / 14 / 4096;
-        header.loopEndSample = loopEndSample - header.loopEndBlock * 4096 * 14;
+        header.loopEndSample = loopEndSample - header.loopEndBlock * 4096 * 14 + startSample;
     }
     SwapRASHeader(&header);
     fs.Write("RAS_", 4);

@@ -1535,9 +1535,12 @@ int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
     {
         LabelTrack* lt = trackFactory->NewLabelTrack();
         double sr = mHeader.sampleRate;
+        double startPoint = mHeader.startSample / sr;
+        lt->AddLabel(SelectedRegion(startPoint, startPoint), wxT("START"));
         lt->AddLabel(SelectedRegion(
-                     (mHeader.loopStartBlock * framesPerBlock * 14 + mHeader.loopStartSample) / sr,
-                     (mHeader.loopEndBlock * framesPerBlock * 14 + mHeader.loopEndSample) / sr), wxT("LOOP"));
+                     (mHeader.loopStartBlock * framesPerBlock * 14 + mHeader.loopStartSample - mHeader.startSample) / sr,
+                     (mHeader.loopEndBlock * framesPerBlock * 14 + mHeader.loopEndSample - mHeader.startSample) / sr),
+                     wxT("LOOP"));
         (*outTracks)[mHeader.chanCount1] = lt;
     }
 
