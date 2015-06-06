@@ -2517,8 +2517,8 @@ int ExportDSPADPCM::ExportRSF(AudacityProject *project,
 
     ProgressDialog *progress = new ProgressDialog(wxFileName(fName).GetName(),
                                                   selectionOnly ?
-                                                      _("Exporting the selected audio as RAS DSPADPCM") :
-                                                      _("Exporting the entire project as RAS DSPADPCM"));
+                                                      _("Exporting the selected audio as G.721 ADPCM") :
+                                                      _("Exporting the entire project as G.721 ADPCM"));
 
     sampleCount numSamples = mixer->Process(sampleFrames);
     if (numSamples <= 2)
