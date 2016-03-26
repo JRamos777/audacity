@@ -252,12 +252,12 @@ FLAC__StreamDecoderWriteStatus MyFLACFile::write_callback(const FLAC__Frame *fra
             tmp[s]=buffer[chn][s];
          }
 
-         iter->get()->Append((samplePtr)tmp,
+         static_cast<WaveTrack*>(iter->get())->Append((samplePtr)tmp,
                   int16Sample,
                   frame->header.blocksize);
       }
       else {
-         iter->get()->Append((samplePtr)buffer[chn],
+         static_cast<WaveTrack*>(iter->get())->Append((samplePtr)buffer[chn],
                   int24Sample,
                   frame->header.blocksize);
       }
@@ -484,7 +484,7 @@ int FLACImportFileHandle::Import(TrackFactory *trackFactory,
    if(useOD)
    {
       sampleCount fileTotalFrames = mNumSamples;
-      sampleCount maxBlockSize = mChannels.begin()->get()->GetMaxBlockSize();
+      sampleCount maxBlockSize = static_cast<WaveTrack*>(mChannels.begin()->get())->GetMaxBlockSize();
       for (sampleCount i = 0; i < fileTotalFrames; i += maxBlockSize) {
          sampleCount blockLen = maxBlockSize;
          if (i + blockLen > fileTotalFrames)
@@ -492,7 +492,7 @@ int FLACImportFileHandle::Import(TrackFactory *trackFactory,
 
          auto iter = mChannels.begin();
          for (int c = 0; c < mNumChannels; ++c, ++iter)
-            iter->get()->AppendCoded(mFilename, i, blockLen, c, ODTask::eODFLAC);
+            static_cast<WaveTrack*>(iter->get())->AppendCoded(mFilename, i, blockLen, c, ODTask::eODFLAC);
 
          mUpdateResult = mProgress->Update(i, fileTotalFrames);
          if (mUpdateResult != eProgressSuccess)
@@ -502,7 +502,7 @@ int FLACImportFileHandle::Import(TrackFactory *trackFactory,
       bool moreThanStereo = mNumChannels>2;
       for (const auto &channel : mChannels)
       {
-         mDecoderTask->AddWaveTrack(channel.get());
+         mDecoderTask->AddWaveTrack(static_cast<WaveTrack*>(channel.get()));
          if(moreThanStereo)
          {
             //if we have 3 more channels, they get imported on seperate tracks, so we add individual tasks for each.
@@ -522,7 +522,7 @@ int FLACImportFileHandle::Import(TrackFactory *trackFactory,
    }
 
    for (const auto &channel : mChannels) {
-      channel->Flush();
+      static_cast<WaveTrack*>(channel.get())->Flush();
    }
    outTracks.swap(mChannels);
 

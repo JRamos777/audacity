@@ -352,7 +352,7 @@ int OggImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders &outTra
       {
          auto iter2 = iter->begin();
          for (int c = 0; c < mVorbisFile->vi[bitstream].channels; ++iter2, ++c)
-            iter2->get()->Append((char *)(mainBuffer + c),
+            static_cast<WaveTrack*>(iter2->get())->Append((char *)(mainBuffer + c),
             int16Sample,
             samplesRead,
             mVorbisFile->vi[bitstream].channels);
@@ -380,7 +380,7 @@ int OggImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders &outTra
    for (auto &link : mChannels)
    {
       for (auto &channel : link) {
-         channel->Flush();
+         static_cast<WaveTrack*>(channel.get())->Flush();
          outTracks.push_back(std::move(channel));
       }
    }

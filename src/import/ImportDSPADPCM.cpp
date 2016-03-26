@@ -343,8 +343,7 @@ public:
 
     wxString GetFileDescription() { return _("Mono GameCube DSPADPCM"); }
     int GetFileUncompressedBytes() { return mHeader.num_samples * 2; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 protected:
     bool mSampleIndexedLoops;
@@ -362,8 +361,7 @@ public:
 
     wxString GetFileDescription() { return _("Stereo Pair GameCube DSPADPCM"); }
     int GetFileUncompressedBytes() { return MAX(mHeader[0].num_samples, mHeader[1].num_samples) * 2 * 2; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 private:
     wxFile *mFile[2];
@@ -379,8 +377,7 @@ public:
 
     wxString GetFileDescription() { return _("RS03 Stereo GameCube DSPADPCM"); }
     int GetFileUncompressedBytes() { return mHeader.num_samples * 2 * mHeader.chan_count; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 private:
     wxFile *mFile;
@@ -399,14 +396,12 @@ public:
     }
 
     wxString GetFileDescription() { return _("Mono CSMP DSPADPCM"); }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags)
+    int Import(TrackFactory *trackFactory, TrackHolders &outTracks, Tags *tags)
     {
-        int result = DSPADPCMStandardMonoImportFileHandle::Import(trackFactory, outTracks, outNumTracks, tags);
+        int result = DSPADPCMStandardMonoImportFileHandle::Import(trackFactory, outTracks, tags);
         if (result == eProgressSuccess)
         {
-            WaveTrack* wt = (WaveTrack*)(*outTracks)[0];
-            wt->SetGain(mVolume / 100.0);
+            static_cast<WaveTrack*>(outTracks[0].get())->SetGain(mVolume / 100.0);
         }
         return result;
     }
@@ -421,8 +416,7 @@ public:
 
     wxString GetFileDescription() { return _("FSB 3.1 Stereo GameCube DSPADPCM"); }
     int GetFileUncompressedBytes() { return mHeader.sampleCount * 2 * mHeader.channelCount; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 private:
     wxFile *mFile;
@@ -439,8 +433,7 @@ public:
 
     wxString GetFileDescription() { return _("RAS Stereo GameCube DSPADPCM"); }
     int GetFileUncompressedBytes() { return mHeader.numSamples * 2 * mHeader.chanCount1; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 private:
     wxFile *mFile;
@@ -458,8 +451,7 @@ public:
 
     wxString GetFileDescription() { return _("RSF Stereo G.721 ADPCM"); }
     int GetFileUncompressedBytes() { return mNumSamples * 2 * 2; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 private:
     wxFile *mFile;
@@ -475,8 +467,7 @@ public:
 
     wxString GetFileDescription() { return _("ADP GameCube Streamed ADPCM"); }
     int GetFileUncompressedBytes() { return mNumBlocks * 28 * 2 * 2; }
-    int Import(TrackFactory *trackFactory, Track ***outTracks,
-               int *outNumTracks, Tags *tags);
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
 
 private:
     wxFile *mFile;
@@ -768,13 +759,13 @@ DSPADPCMStandardMonoImportFileHandle::DSPADPCMStandardMonoImportFileHandle(wxFil
 }
 
 int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
+    outTracks.clear();
     CreateProgress();
 
-    WaveTrack* channel = trackFactory->NewWaveTrack(int16Sample, mHeader.sample_rate);
+    std::unique_ptr<WaveTrack> channel = trackFactory->NewWaveTrack(int16Sample, mHeader.sample_rate);
 
     sampleCount fileTotalFrames = mHeader.num_samples;
     int updateResult = eProgressSuccess;
@@ -829,20 +820,17 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        delete channel;
         delete[] adpcmBlock;
         return updateResult;
     }
 
-    *outNumTracks = ((mHeader.loop_flag) ? 2 : 1);
-    *outTracks = new Track *[*outNumTracks];
     channel->Flush();
-    (*outTracks)[0] = channel;
+    outTracks.push_back(std::move(channel));
 
     /* Add loop label */
     if (mHeader.loop_flag)
     {
-        LabelTrack* lt = trackFactory->NewLabelTrack();
+        std::unique_ptr<LabelTrack> lt = trackFactory->NewLabelTrack();
         double sr = mHeader.sample_rate;
         if (mSampleIndexedLoops)
             lt->AddLabel(SelectedRegion(
@@ -852,7 +840,7 @@ int DSPADPCMStandardMonoImportFileHandle::Import(TrackFactory *trackFactory,
             lt->AddLabel(SelectedRegion(
                          nibbleidx_to_sampleidx(mHeader.loop_start) / sr,
                          nibbleidx_to_sampleidx(mHeader.loop_end) / sr), wxT("LOOP"));
-        (*outTracks)[1] = lt;
+        outTracks.push_back(std::move(lt));
     }
 
     delete[] adpcmBlock;
@@ -893,13 +881,12 @@ DSPADPCMStandardStereoImportFileHandle::DSPADPCMStandardStereoImportFileHandle(w
 }
 
 int DSPADPCMStandardStereoImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
     CreateProgress();
 
-    WaveTrack* channels[2];
+    std::unique_ptr<WaveTrack> channels[2];
 
     for (int c=0 ; c<2 ; c++)
     {
@@ -982,29 +969,25 @@ int DSPADPCMStandardStereoImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        for (int c=0 ; c<2 ; c++)
-            delete channels[c];
         delete[] adpcmBlock[0];
         delete[] adpcmBlock[1];
         return updateResult;
     }
 
-    *outNumTracks = ((mHeader[0].loop_flag) ? 3 : 2);
-    *outTracks = new Track *[*outNumTracks];
     for(int c=0 ; c<2 ; c++) {
         channels[c]->Flush();
-        (*outTracks)[c] = channels[c];
+        outTracks.push_back(std::move(channels[c]));
     }
 
     /* Add loop label */
     if (mHeader[0].loop_flag)
     {
-        LabelTrack* lt = trackFactory->NewLabelTrack();
+        std::unique_ptr<LabelTrack> lt = trackFactory->NewLabelTrack();
         double sr = mHeader[0].sample_rate;
         lt->AddLabel(SelectedRegion(
                      nibbleidx_to_sampleidx(mHeader[0].loop_start) / sr,
                      nibbleidx_to_sampleidx(mHeader[0].loop_end) / sr), wxT("LOOP"));
-        (*outTracks)[2] = lt;
+        outTracks.push_back(std::move(lt));
     }
 
     delete[] adpcmBlock[0];
@@ -1047,13 +1030,12 @@ DSPADPCMRS03ImportFileHandle::DSPADPCMRS03ImportFileHandle(wxFile *file, const w
 }
 
 int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
     CreateProgress();
 
-    WaveTrack* channels[2];
+    std::unique_ptr<WaveTrack> channels[2];
     for (int c=0 ; c<mHeader.chan_count ; ++c)
     {
         channels[c] = trackFactory->NewWaveTrack(int16Sample, mHeader.sample_rate);
@@ -1165,29 +1147,25 @@ int DSPADPCMRS03ImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        for (int c=0 ; c<2 ; c++)
-            delete channels[c];
         delete[] adpcmBlock;
         return updateResult;
     }
 
-    *outNumTracks = ((mHeader.loop_flag) ? mHeader.chan_count + 1 : mHeader.chan_count);
-    *outTracks = new Track *[*outNumTracks];
     for (int c=0 ; c<mHeader.chan_count ; ++c)
     {
         channels[c]->Flush();
-        (*outTracks)[c] = channels[c];
+        outTracks.push_back(std::move(channels[c]));
     }
 
     /* Add loop label */
     if (mHeader.loop_flag)
     {
-        LabelTrack* lt = trackFactory->NewLabelTrack();
+        std::unique_ptr<LabelTrack> lt = trackFactory->NewLabelTrack();
         double sr = mHeader.sample_rate;
         lt->AddLabel(SelectedRegion(
                      byteidx_to_sampleidx(mHeader.loop_start) / sr,
                      byteidx_to_sampleidx(mHeader.loop_end) / sr), wxT("LOOP"));
-        (*outTracks)[mHeader.chan_count] = lt;
+        outTracks.push_back(std::move(lt));
     }
 
     delete[] adpcmBlock;
@@ -1239,13 +1217,12 @@ DSPADPCMFSB31ImportFileHandle::DSPADPCMFSB31ImportFileHandle(wxFile *file, const
 }
 
 int DSPADPCMFSB31ImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
     CreateProgress();
 
-    WaveTrack* channels[2];
+    std::unique_ptr<WaveTrack> channels[2];
     for (int c=0 ; c<mHeader.channelCount ; ++c)
     {
         channels[c] = trackFactory->NewWaveTrack(int16Sample, mHeader.defaultFreq);
@@ -1368,28 +1345,24 @@ int DSPADPCMFSB31ImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        for (int c=0 ; c<2 ; c++)
-            delete channels[c];
         return updateResult;
     }
 
-    *outNumTracks = ((mHeader.mode & FSOUND_LOOP_NORMAL) ? mHeader.channelCount + 1 : mHeader.channelCount);
-    *outTracks = new Track *[*outNumTracks];
     for (int c=0 ; c<mHeader.channelCount ; ++c)
     {
         channels[c]->Flush();
-        (*outTracks)[c] = channels[c];
+        outTracks.push_back(std::move(channels[c]));
     }
 
     /* Add loop label */
     if (mHeader.mode & FSOUND_LOOP_NORMAL)
     {
-        LabelTrack* lt = trackFactory->NewLabelTrack();
+        std::unique_ptr<LabelTrack> lt = trackFactory->NewLabelTrack();
         double sr = mHeader.defaultFreq;
         lt->AddLabel(SelectedRegion(
                      mHeader.loopStart / sr,
                      mHeader.loopEnd / sr), wxT("LOOP"));
-        (*outTracks)[mHeader.channelCount] = lt;
+        outTracks.push_back(std::move(lt));
     }
 
     return updateResult;
@@ -1438,13 +1411,12 @@ DSPADPCMRASImportFileHandle::DSPADPCMRASImportFileHandle(wxFile *file, const wxS
 }
 
 int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
     CreateProgress();
 
-    WaveTrack* channels[2];
+    std::unique_ptr<WaveTrack> channels[2];
     for (int c=0 ; c<mHeader.chanCount1 ; ++c)
     {
         channels[c] = trackFactory->NewWaveTrack(int16Sample, mHeader.sampleRate);
@@ -1517,28 +1489,24 @@ int DSPADPCMRASImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        for (int c=0 ; c<2 ; c++)
-            delete channels[c];
         return updateResult;
     }
 
-    *outNumTracks = ((mHeader.loopEndBlock || mHeader.loopEndSample) ? mHeader.chanCount1 + 1 : mHeader.chanCount1);
-    *outTracks = new Track *[*outNumTracks];
     for (int c=0 ; c<mHeader.chanCount1 ; ++c)
     {
         channels[c]->Flush();
-        (*outTracks)[c] = channels[c];
+        outTracks.push_back(std::move(channels[c]));
     }
 
     /* Add loop label */
     if (mHeader.loopEndBlock || mHeader.loopEndSample)
     {
-        LabelTrack* lt = trackFactory->NewLabelTrack();
+        std::unique_ptr<LabelTrack> lt = trackFactory->NewLabelTrack();
         double sr = mHeader.sampleRate;
         lt->AddLabel(SelectedRegion(
                      (mHeader.loopStartBlock * framesPerBlock * 14 + mHeader.loopStartSample) / sr,
                      (mHeader.loopEndBlock * framesPerBlock * 14 + mHeader.loopEndSample) / sr), wxT("LOOP"));
-        (*outTracks)[mHeader.chanCount1] = lt;
+        outTracks.push_back(std::move(lt));
     }
 
     /* Add BPM metadata */
@@ -2027,13 +1995,12 @@ DSPADPCMRSFImportFileHandle::DSPADPCMRSFImportFileHandle(wxFile *file, const wxS
 }
 
 int DSPADPCMRSFImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
     CreateProgress();
 
-    WaveTrack* channels[2];
+    std::unique_ptr<WaveTrack> channels[2];
     for (int c=0 ; c<2 ; ++c)
     {
         channels[c] = trackFactory->NewWaveTrack(int16Sample, 32000);
@@ -2087,17 +2054,13 @@ int DSPADPCMRSFImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        for (int c=0 ; c<2 ; c++)
-            delete channels[c];
         return updateResult;
     }
 
-    *outNumTracks = 2;
-    *outTracks = new Track *[2];
     for (int c=0 ; c<2 ; ++c)
     {
         channels[c]->Flush();
-        (*outTracks)[c] = channels[c];
+        outTracks.push_back(std::move(channels[c]));
     }
 
     return updateResult;
@@ -2171,13 +2134,12 @@ DSPADPCMADPImportFileHandle::DSPADPCMADPImportFileHandle(wxFile *file, const wxS
 }
 
 int DSPADPCMADPImportFileHandle::Import(TrackFactory *trackFactory,
-                                     Track ***outTracks,
-                                     int *outNumTracks,
+                                     TrackHolders &outTracks,
                                      Tags *tags)
 {
     CreateProgress();
 
-    WaveTrack* channels[2];
+    std::unique_ptr<WaveTrack> channels[2];
     for (int c=0 ; c<2 ; ++c)
     {
         channels[c] = trackFactory->NewWaveTrack(int16Sample, 48000);
@@ -2236,17 +2198,13 @@ int DSPADPCMADPImportFileHandle::Import(TrackFactory *trackFactory,
 
     if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
     {
-        for (int c=0 ; c<2 ; c++)
-            delete channels[c];
         return updateResult;
     }
 
-    *outNumTracks = 2;
-    *outTracks = new Track *[2];
     for (int c=0 ; c<2 ; ++c)
     {
         channels[c]->Flush();
-        (*outTracks)[c] = channels[c];
+        outTracks.push_back(std::move(channels[c]));
     }
 
     return updateResult;

@@ -213,7 +213,7 @@ void ImportRaw(wxWindow *parent, const wxString &fileName,
       firstChannel->SetLinked(true);
    }
 
-   sampleCount maxBlockSize = firstChannel->GetMaxBlockSize();
+   sampleCount maxBlockSize = static_cast<WaveTrack*>(firstChannel)->GetMaxBlockSize();
    int updateResult = eProgressSuccess;
 
    SampleBuffer srcbuffer(maxBlockSize * numChannels, format);
@@ -254,7 +254,7 @@ void ImportRaw(wxWindow *parent, const wxString &fileName,
                      ((float *)srcbuffer.ptr())[numChannels*j+c];
             }
 
-            iter->get()->Append(buffer.ptr(), format, block);
+            static_cast<WaveTrack*>(iter->get())->Append(buffer.ptr(), format, block);
          }
          framescompleted += block;
       }
@@ -278,7 +278,7 @@ void ImportRaw(wxWindow *parent, const wxString &fileName,
    }
 
    for (const auto &channel : channels)
-      channel->Flush();
+      static_cast<WaveTrack*>(channel.get())->Flush();
    outTracks.swap(channels);
 }
 

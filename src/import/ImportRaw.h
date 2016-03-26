@@ -14,7 +14,7 @@
 #include "../MemoryX.h"
 
 class TrackFactory;
-class WaveTrack;
+class Track;
 class DirManager;
 class wxString;
 class wxWindow;
@@ -23,12 +23,12 @@ class wxWindow;
 
 #ifdef __AUDACITY_OLD_STD__
 
-class TrackHolder : public std::shared_ptr < WaveTrack >
+class TrackHolder : public std::shared_ptr < Track >
 {
 public:
    // shared_ptr can construct from unique_ptr&& in newer std, but not older,
    // so define it here
-   TrackHolder &operator=(std::unique_ptr<WaveTrack> &&that)
+   TrackHolder &operator=(std::unique_ptr<Track> &&that)
    {
       reset(that.release());
       return *this;
@@ -39,7 +39,7 @@ using TrackHolders = std::vector<TrackHolder>;
 
 #else
 
-using TrackHolders = std::vector<std::unique_ptr<WaveTrack>>;
+using TrackHolders = std::vector<std::unique_ptr<Track>>;
 
 #endif
 

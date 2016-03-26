@@ -244,7 +244,7 @@ int MP3ImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders &outTra
       /* copy the WaveTrack pointers into the Track pointer list that
        * we are expected to fill */
    for(const auto &channel : mPrivateData.channels) {
-      channel->Flush();
+      static_cast<WaveTrack*>(channel.get())->Flush();
    }
    outTracks.swap(mPrivateData.channels);
 
@@ -511,7 +511,7 @@ enum mad_flow output_cb(void *_data,
 
    auto iter = data->channels.begin();
    for (int chn = 0; chn < channels; ++iter, ++chn)
-      iter->get()->Append((samplePtr)channelBuffers[chn],
+      static_cast<WaveTrack*>(iter->get())->Append((samplePtr)channelBuffers[chn],
                                   floatSample,
                                   samples);
 

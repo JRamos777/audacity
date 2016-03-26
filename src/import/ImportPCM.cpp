@@ -363,7 +363,7 @@ int PCMImportFileHandle::Import(TrackFactory *trackFactory,
    }
 
    sampleCount fileTotalFrames = (sampleCount)mInfo.frames;
-   sampleCount maxBlockSize = channels.begin()->get()->GetMaxBlockSize();
+   sampleCount maxBlockSize = static_cast<WaveTrack*>(channels.begin()->get())->GetMaxBlockSize();
    int updateResult = false;
 
    // If the format is not seekable, we must use 'copy' mode,
@@ -390,7 +390,7 @@ int PCMImportFileHandle::Import(TrackFactory *trackFactory,
 
          auto iter = channels.begin();
          for (int c = 0; c < mInfo.channels; ++iter, ++c)
-            iter->get()->AppendAlias(mFilename, i, blockLen, c,useOD);
+            static_cast<WaveTrack*>(iter->get())->AppendAlias(mFilename, i, blockLen, c,useOD);
 
          if (++updateCounter == 50) {
             updateResult = mProgress->Update(i, fileTotalFrames);
@@ -407,7 +407,7 @@ int PCMImportFileHandle::Import(TrackFactory *trackFactory,
          bool moreThanStereo = mInfo.channels>2;
          for (const auto &channel : channels)
          {
-            computeTask->AddWaveTrack(channel.get());
+            computeTask->AddWaveTrack(static_cast<WaveTrack*>(channel.get()));
             if(moreThanStereo)
             {
                //if we have 3 more channels, they get imported on seperate tracks, so we add individual tasks for each.
@@ -469,7 +469,7 @@ int PCMImportFileHandle::Import(TrackFactory *trackFactory,
                         ((float *)srcbuffer.ptr())[mInfo.channels*j+c];
                }
 
-               iter->get()->Append(buffer.ptr(), (mFormat == int16Sample)?int16Sample:floatSample, block);
+               static_cast<WaveTrack*>(iter->get())->Append(buffer.ptr(), (mFormat == int16Sample)?int16Sample:floatSample, block);
             }
             framescompleted += block;
          }
@@ -487,7 +487,7 @@ int PCMImportFileHandle::Import(TrackFactory *trackFactory,
    }
 
    for(const auto &channel : channels) {
-      channel->Flush();
+      static_cast<WaveTrack*>(channel.get())->Flush();
    }
    outTracks.swap(channels);
 
