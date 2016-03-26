@@ -556,7 +556,7 @@ int FFmpegImportFileHandle::Import(TrackFactory *trackFactory,
          {
             ++c;
 
-            WaveTrack *t = channel.get();
+            WaveTrack *t = static_cast<WaveTrack*>(channel.get());
             t->InsertSilence(0,double(stream_delay)/AV_TIME_BASE);
          }
       }
@@ -680,7 +680,7 @@ int FFmpegImportFileHandle::Import(TrackFactory *trackFactory,
    {
       for(auto &channel : stream)
       {
-         channel->Flush();
+         static_cast<WaveTrack*>(channel.get())->Flush();
          outTracks.push_back(std::move(channel));
       }
    }
@@ -787,7 +787,7 @@ int FFmpegImportFileHandle::WriteData(streamContext *sc)
    auto iter2 = iter->begin();
    for (int chn=0; chn < nChannels; ++iter2, ++chn)
    {
-      iter2->get()->Append((samplePtr)tmp[chn],sc->m_osamplefmt,index);
+      static_cast<WaveTrack*>(iter2->get())->Append((samplePtr)tmp[chn],sc->m_osamplefmt,index);
       free(tmp[chn]);
    }
 
