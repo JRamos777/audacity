@@ -562,13 +562,13 @@ bool LV2Effect::SetHost(EffectHostInterface *host)
       lilv_scale_points_free(points);
 
       // Collect the value and range info
-      ctrl.mHasLo = !isnan(minimumVals[i]);
-      ctrl.mHasHi = !isnan(maximumVals[i]);
+      ctrl.mHasLo = !std::isnan(minimumVals[i]);
+      ctrl.mHasHi = !std::isnan(maximumVals[i]);
       ctrl.mMin = ctrl.mHasLo ? minimumVals[i] : 0.0;
       ctrl.mMax = ctrl.mHasHi ? maximumVals[i] : 1.0;
       ctrl.mLo = ctrl.mMin;
       ctrl.mHi = ctrl.mMax;
-      ctrl.mDef = !isnan(defaultValues[i]) ?
+      ctrl.mDef = !std::isnan(defaultValues[i]) ?
                   defaultValues[i] :
                      ctrl.mHasLo ?
                      ctrl.mLo :

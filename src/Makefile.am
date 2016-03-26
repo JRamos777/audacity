@@ -410,6 +410,8 @@ audacity_SOURCES = \
 	export/ExportOGG.h \
 	export/ExportPCM.cpp \
 	export/ExportPCM.h \
+	export/ExportDSPADPCM.cpp \
+	export/ExportDSPADPCM.h \
 	import/Import.cpp \
 	import/Import.h \
 	import/ImportFLAC.cpp \
@@ -425,6 +427,8 @@ audacity_SOURCES = \
 	import/ImportPlugin.h \
 	import/ImportRaw.cpp \
 	import/ImportRaw.h \
+	import/ImportDSPADPCM.cpp \
+	import/ImportDSPADPCM.h \
 	import/RawAudioGuess.cpp \
 	import/RawAudioGuess.h \
 	import/FormatClassifier.cpp \
