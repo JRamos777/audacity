@@ -1652,7 +1652,7 @@ int DSPADPCMSTMImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders
         while (samplescompleted[c] < mDSPHeaders[c].num_samples)
         {
             int remSamples = mDSPHeaders[c].num_samples - samplescompleted[c];
-            int loadBlks = std::min(4096, (remSamples + 13) / 14);
+            int loadBlks = MIN(4096, (remSamples + 13) / 14);
             mFile->Read(adpcmBlock, loadBlks * 8);
             for (int f=0 ; f<loadBlks ; ++f)
             {

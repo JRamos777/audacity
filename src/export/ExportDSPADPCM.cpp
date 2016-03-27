@@ -2717,7 +2717,7 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
         while (samplescompleted[c] < numSamples)
         {
             int remSamples = numSamples - samplescompleted[c];
-            int writeFrames = std::min(4096, (remSamples + 13) / 14);
+            int writeFrames = MIN(4096, (remSamples + 13) / 14);
             for (int f=0 ; f<writeFrames ; ++f)
             {
                 for (int s=0 ; s<14 ; ++s)
