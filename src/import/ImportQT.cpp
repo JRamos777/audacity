@@ -327,7 +327,7 @@ int QTImportFileHandle::Import(TrackFactory *trackFactory,
          abl->mBuffers[c].mData = malloc(abl->mBuffers[c].mDataByteSize);
    
          channels[c] = trackFactory->NewWaveTrack(format);
-         channels[c]->SetRate(desc.mSampleRate);
+         static_cast<WaveTrack*>(channels[c].get())->SetRate(desc.mSampleRate);
    
          if (numchan == 2) {
             if (c == 0) {
@@ -354,7 +354,7 @@ int QTImportFileHandle::Import(TrackFactory *trackFactory,
          }
    
          for (c = 0; c < numchan; c++) {
-            channels[c]->Append((char *) abl->mBuffers[c].mData, floatSample, numFrames);
+            static_cast<WaveTrack*>(channels[c].get())->Append((char *) abl->mBuffers[c].mData, floatSample, numFrames);
          }
    
          numSamples += numFrames;
@@ -371,7 +371,7 @@ int QTImportFileHandle::Import(TrackFactory *trackFactory,
    
       if (res) {
          for (const auto &channel: channels) {
-            channel->Flush();
+            static_cast<WaveTrack*>(channel.get())->Flush();
          }
    
          outTracks.swap(channels);

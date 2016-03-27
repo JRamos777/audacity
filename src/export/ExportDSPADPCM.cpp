@@ -2418,7 +2418,8 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
     }
 
     unsigned curSample[2] = {};
-    unsigned remSamples[2] = {numSamples, numSamples};
+    unsigned remSamples[2] = {static_cast<unsigned int>(numSamples),
+                              static_cast<unsigned int>(numSamples)};
 
     TADPCMFrame* adpcmBlock = new TADPCMFrame[4096];
     short convSamps[2][16] = {};

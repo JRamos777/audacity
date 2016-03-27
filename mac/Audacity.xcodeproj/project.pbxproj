@@ -1210,6 +1210,8 @@
 		28FE4A090ABF4E960056F5C4 /* sse_optimized.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 28FE4A070ABF4E960056F5C4 /* sse_optimized.cpp */; };
 		8406A93812D0F2510011EA01 /* EQDefaultCurves.xml in Resources */ = {isa = PBXBuildFile; fileRef = 8406A93712D0F2510011EA01 /* EQDefaultCurves.xml */; };
 		8484F31413086237002DF7F0 /* DeviceManager.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 8484F31213086237002DF7F0 /* DeviceManager.cpp */; };
+		E4A8D3541CA7AB82000DB17E /* ExportDSPADPCM.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E4A8D3521CA7AB82000DB17E /* ExportDSPADPCM.cpp */; };
+		E4A8D3571CA7AB8D000DB17E /* ImportDSPADPCM.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E4A8D3551CA7AB8D000DB17E /* ImportDSPADPCM.cpp */; };
 		ED15214D163C22F000451B5F /* lsr.c in Sources */ = {isa = PBXBuildFile; fileRef = ED152123163C220300451B5F /* lsr.c */; };
 		ED152161163C244200451B5F /* soxr.c in Sources */ = {isa = PBXBuildFile; fileRef = ED15215F163C244200451B5F /* soxr.c */; };
 		ED152162163C244200451B5F /* soxr.h in Headers */ = {isa = PBXBuildFile; fileRef = ED152160163C244200451B5F /* soxr.h */; };
@@ -2975,6 +2977,10 @@
 		8406A93712D0F2510011EA01 /* EQDefaultCurves.xml */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; name = EQDefaultCurves.xml; path = ../presets/EQDefaultCurves.xml; sourceTree = SOURCE_ROOT; };
 		8484F31213086237002DF7F0 /* DeviceManager.cpp */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 3; lastKnownFileType = sourcecode.cpp.cpp; path = DeviceManager.cpp; sourceTree = "<group>"; tabWidth = 3; };
 		8484F31313086237002DF7F0 /* DeviceManager.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 3; lastKnownFileType = sourcecode.c.h; path = DeviceManager.h; sourceTree = "<group>"; tabWidth = 3; };
+		E4A8D3521CA7AB82000DB17E /* ExportDSPADPCM.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ExportDSPADPCM.cpp; sourceTree = "<group>"; };
+		E4A8D3531CA7AB82000DB17E /* ExportDSPADPCM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ExportDSPADPCM.h; sourceTree = "<group>"; };
+		E4A8D3551CA7AB8D000DB17E /* ImportDSPADPCM.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ImportDSPADPCM.cpp; sourceTree = "<group>"; };
+		E4A8D3561CA7AB8D000DB17E /* ImportDSPADPCM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ImportDSPADPCM.h; sourceTree = "<group>"; };
 		ED05D1020E50AD5700CC4BD3 /* audioreader.cpp */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 3; lastKnownFileType = sourcecode.cpp.cpp; path = audioreader.cpp; sourceTree = "<group>"; tabWidth = 3; };
 		ED05D1030E50AD5700CC4BD3 /* audioreader.h */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 3; lastKnownFileType = sourcecode.c.h; path = audioreader.h; sourceTree = "<group>"; tabWidth = 3; };
 		ED05D1140E50AD5700CC4BD3 /* comp_chroma.cpp */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 3; lastKnownFileType = sourcecode.cpp.cpp; path = comp_chroma.cpp; sourceTree = "<group>"; tabWidth = 3; };
@@ -4142,6 +4148,8 @@
 		1790B06209883BFD008A330A /* export */ = {
 			isa = PBXGroup;
 			children = (
+				E4A8D3521CA7AB82000DB17E /* ExportDSPADPCM.cpp */,
+				E4A8D3531CA7AB82000DB17E /* ExportDSPADPCM.h */,
 				1790B06409883BFD008A330A /* Export.cpp */,
 				1790B06509883BFD008A330A /* Export.h */,
 				1790B06609883BFD008A330A /* ExportCL.cpp */,
@@ -4169,6 +4177,8 @@
 		1790B07D09883BFD008A330A /* import */ = {
 			isa = PBXGroup;
 			children = (
+				E4A8D3551CA7AB8D000DB17E /* ImportDSPADPCM.cpp */,
+				E4A8D3561CA7AB8D000DB17E /* ImportDSPADPCM.h */,
 				28F67173197DFA1C00075C32 /* FormatClassifier.cpp */,
 				28F67174197DFA1C00075C32 /* FormatClassifier.h */,
 				28F67175197DFA1C00075C32 /* MultiFormatReader.cpp */,
@@ -7313,6 +7323,7 @@
 				282B70331B682342009A1618 /* WaveformPrefs.cpp in Sources */,
 				1790B17409883BFD008A330A /* Languages.cpp in Sources */,
 				1790B17509883BFD008A330A /* Legacy.cpp in Sources */,
+				E4A8D3571CA7AB8D000DB17E /* ImportDSPADPCM.cpp in Sources */,
 				1790B17809883BFD008A330A /* Menus.cpp in Sources */,
 				1790B17A09883BFD008A330A /* Mix.cpp in Sources */,
 				1790B17C09883BFD008A330A /* NoteTrack.cpp in Sources */,
@@ -7355,6 +7366,7 @@
 				1790B1A909883BFD008A330A /* XMLFileReader.cpp in Sources */,
 				1790B1AA09883BFD008A330A /* XMLTagHandler.cpp in Sources */,
 				17190D24098A3F0B004583C6 /* AColor.cpp in Sources */,
+				E4A8D3541CA7AB82000DB17E /* ExportDSPADPCM.cpp in Sources */,
 				17190D25098A3F15004583C6 /* AboutDialog.cpp in Sources */,
 				174D9031098C78AF00D5909F /* CommandManager.cpp in Sources */,
 				174D9033098C78AF00D5909F /* Keyboard.cpp in Sources */,

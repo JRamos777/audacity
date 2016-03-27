@@ -15,6 +15,8 @@
 
 class TrackFactory;
 class Track;
+class WaveTrack;
+class LabelTrack;
 class DirManager;
 class wxString;
 class wxWindow;
@@ -28,7 +30,30 @@ class TrackHolder : public std::shared_ptr < Track >
 public:
    // shared_ptr can construct from unique_ptr&& in newer std, but not older,
    // so define it here
+   TrackHolder() = default;
+   TrackHolder(std::unique_ptr<Track> &&that)
+   {
+      *this = std::move(that);
+   }
    TrackHolder &operator=(std::unique_ptr<Track> &&that)
+   {
+      reset(that.release());
+      return *this;
+   }
+   TrackHolder(std::unique_ptr<WaveTrack> &&that)
+   {
+      *this = std::move(that);
+   }
+   TrackHolder &operator=(std::unique_ptr<WaveTrack> &&that)
+   {
+      reset(that.release());
+      return *this;
+   }
+   TrackHolder(std::unique_ptr<LabelTrack> &&that)
+   {
+      *this = std::move(that);
+   }
+   TrackHolder &operator=(std::unique_ptr<LabelTrack> &&that)
    {
       reset(that.release());
       return *this;

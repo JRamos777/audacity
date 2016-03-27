@@ -201,8 +201,8 @@ MixAndRender(TrackList *tracks, TrackFactory *trackFactory,
    }
    else {
       return std::make_pair(
-         std::move(mixLeft),
-         std::move(mixRight)
+         mixLeft.release(),
+         mixRight.release()
       );
 #if 0
    int elapsedMS = wxGetElapsedTime();
