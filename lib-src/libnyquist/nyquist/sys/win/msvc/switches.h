@@ -87,7 +87,7 @@ void nyquist_printf(char *format, ...);
 #define HAVE_LRINTF 0
 
 /* Define to 1 if you have the `snprintf' function. */
-#define snprintf _snprintf
+//#define snprintf _snprintf
 #define HAVE_SNPRINTF 1
 
 /* Define to 1 if the system has the type `ssize_t'. */

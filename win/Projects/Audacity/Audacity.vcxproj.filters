@@ -851,6 +851,12 @@
     <ClCompile Include="..\..\..\src\effects\VST\VSTControlMSW.cpp">
       <Filter>src\effects\VST</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\src\import\ImportDSPADPCM.cpp">
+      <Filter>src\import</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\export\ExportDSPADPCM.cpp">
+      <Filter>src\export</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\src\AboutDialog.h">
@@ -1716,6 +1722,12 @@
     </ClInclude>
     <ClInclude Include="..\..\..\src\MemoryX.h">
       <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\import\ImportDSPADPCM.h">
+      <Filter>src\import</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\src\export\ExportDSPADPCM.h">
+      <Filter>src\export</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

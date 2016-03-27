@@ -48,7 +48,7 @@ function.
 #include "ExportFFmpegDialogs.h"
 
 #if defined(WIN32)
-#define snprintf _snprintf
+//#define snprintf _snprintf
 #endif
 
 #if defined(USE_FFMPEG)

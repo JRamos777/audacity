@@ -77,7 +77,7 @@ llrintf (float flt)
 #endif
 
 /* Nor does it have the snprintf function */
-#define snprintf _snprintf
+//#define snprintf _snprintf
 
 /* The above was added to provide the necessary support on Windows */
 

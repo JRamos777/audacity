@@ -26,7 +26,7 @@
 #define dlopen(path, flags) LoadLibrary(path)
 #define dlclose(lib) FreeLibrary((HMODULE)lib)
 #define inline __inline
-#define snprintf _snprintf
+//#define snprintf _snprintf
 static inline char* dlerror(void) { return "Unknown error"; }
 #else
 #include <dlfcn.h>
