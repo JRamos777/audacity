@@ -49,6 +49,8 @@
 #include <float.h>
 #include <string.h>
 
+#define ROUND_UP_32(val) (((val) + 31) & ~31)
+
 #ifndef __BIG_ENDIAN__
 
 static inline uint32_t bswapu32(uint32_t val)
@@ -275,6 +277,33 @@ static void SwapDkctfLABL(dkctf_labl* h)
     *((uint32_t*)&h->loopEndSecs) = bswapu32(*((uint32_t*)&h->loopEndSecs));
     for (int i=0 ; i<3 ; ++i)
         h->unk5[i] = bswapu32(h->unk5[i]);
+}
+
+struct stm_header
+{
+    uint16_t field00;                // 0x00, always 512, possibly a version number of 2.00
+    uint16_t sampleRate;             // 0x02, usually 32000
+    uint32_t numChannels;            // 0x04, usually 2 (could also be initial offset)
+    uint32_t adpcmData2Offset;       // 0x08, byte offset to the adpcm data of the second channel (relative to the end of the this header + all channel headers)
+    uint32_t adpcmLoopStartOffset;   // 0x0C, byte loop start offset, equal to 0xFFFFFFFF if not used (relative to the start of the data itself, not the headers)
+    uint32_t adpcmData2OffsetAux1;   // 0x10, same value as adpcmData2Offset
+    uint32_t adpcmData2OffsetAux2;   // 0x14, same value as adpcmData2Offset
+    uint32_t adpcmLoopOffsetAux1;    // 0x18, if adpcmLoopOffset != 0xFFFFFFFF then same value else value is 0
+    uint32_t adpcmLoopOffsetAux2;    // 0x1C, same as adpcmData2OffsetAux1
+    uint8_t  padding[32];            // 0x20, 32 bytes unused
+};
+
+static void SwapSTMHeader(stm_header* h)
+{
+    h->field00 = bswap16(h->field00);
+    h->sampleRate = bswap16(h->sampleRate);
+    h->numChannels = bswapu32(h->numChannels);
+    h->adpcmData2Offset = bswapu32(h->adpcmData2Offset);
+    h->adpcmLoopStartOffset = bswapu32(h->adpcmLoopStartOffset);
+    h->adpcmData2OffsetAux1 = bswapu32(h->adpcmData2OffsetAux1);
+    h->adpcmData2OffsetAux2 = bswapu32(h->adpcmData2OffsetAux2);
+    h->adpcmLoopOffsetAux1 = bswapu32(h->adpcmLoopOffsetAux1);
+    h->adpcmLoopOffsetAux2 = bswapu32(h->adpcmLoopOffsetAux2);
 }
 
 typedef unsigned char TADPCMFrame[8];
@@ -1529,6 +1558,7 @@ class ExportDSPADPCM : public ExportPlugin
     int mFsbFormat;
     int mRasFormat;
     int mRsfFormat;
+    int mStmFormat;
 public:
     ExportDSPADPCM();
     void Destroy();
@@ -1580,6 +1610,13 @@ private:
                   double t0,
                   double t1,
                   MixerSpec *mixerSpec);
+    int ExportSTM(AudacityProject *project,
+                  int numChannels,
+                  const wxString& fName,
+                  bool selectionOnly,
+                  double t0,
+                  double t1,
+                  MixerSpec *mixerSpec);
 };
 
 ExportDSPADPCM::ExportDSPADPCM()
@@ -1614,6 +1651,13 @@ ExportDSPADPCM::ExportDSPADPCM()
     SetMaxChannels(2, mRasFormat);
     AddExtension(wxT("ras"), mRasFormat);
     AddExtension(wxT("strm"), mRasFormat);
+
+    mStmFormat = AddFormat() - 1;
+    SetFormat(wxT("STM"), mStmFormat);
+    SetCanMetaData(false, mStmFormat);
+    SetDescription(wxT("Nintendo GameCube DSPADPCM (.stm)"), mStmFormat);
+    SetMaxChannels(2, mStmFormat);
+    AddExtension(wxT("stm"), mStmFormat);
 
     mRsfFormat = AddFormat() - 1;
     SetFormat(wxT("RSF"), mRsfFormat);
@@ -2540,6 +2584,176 @@ int ExportDSPADPCM::ExportRSF(AudacityProject *project,
     return updateResult;
 }
 
+int ExportDSPADPCM::ExportSTM(AudacityProject *project,
+                              int numChannels,
+                              const wxString& fName,
+                              bool selectionOnly,
+                              double t0,
+                              double t1,
+                              MixerSpec *mixerSpec)
+{
+    double       rate = project->GetRate();
+    TrackList   *tracks = project->GetTracks();
+
+    unsigned int sampleRate = (unsigned int)(rate + 0.5);
+    unsigned int sampleFrames = (unsigned int)((t1 - t0)*rate + 0.5);
+
+    wxFile fs;   // will be closed when it goes out of scope
+    if (!fs.Open(fName, wxFile::write)) {
+        wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                      fName.c_str()));
+        return false;
+    }
+
+    int updateResult = eProgressSuccess;
+
+    const WaveTrackConstArray waveTracks =
+      tracks->GetWaveTrackConstArray(selectionOnly, false);
+    Mixer *mixer = CreateMixer(waveTracks,
+                               tracks->GetTimeTrack(),
+                               t0, t1,
+                               numChannels, sampleFrames, false,
+                               rate, int16Sample, true, mixerSpec);
+
+    ProgressDialog *progress = new ProgressDialog(wxFileName(fName).GetName(),
+                                                  selectionOnly ?
+                                                      _("Exporting the selected audio as STM DSPADPCM") :
+                                                      _("Exporting the entire project as STM DSPADPCM"));
+
+    sampleCount numSamples = mixer->Process(sampleFrames);
+    if (numSamples <= 2)
+    {
+        delete progress;
+        delete mixer;
+        return eProgressFailed;
+    }
+
+    /* Compute sample/block/frame counts */
+    unsigned chanFullFrames = numSamples / 14;
+    unsigned chanFullSamples = chanFullFrames * 14;
+    unsigned chanRemSamples = numSamples - chanFullSamples;
+    unsigned chanFrames = chanFullFrames + (chanRemSamples ? 1 : 0);
+
+    /* See if project contains loop region */
+    TrackListOfKindIterator labelIt(Track::Label);
+    const LabelTrack* labelTrack;
+    bool loops = false;
+    uint32_t loopStartSample = 0;
+    uint32_t loopStartByte = 0xffffffff;
+    uint32_t loopEndByte = ROUND_UP_32(chanFrames * 8);
+    for (labelTrack = (LabelTrack*)labelIt.First(tracks);
+         labelTrack;
+         labelTrack = (LabelTrack*)labelIt.Next())
+    {
+        for (int l=0 ; l<labelTrack->GetNumLabels() ; ++l)
+        {
+            const LabelStruct* label = labelTrack->GetLabel(l);
+            if (!label->title.CmpNoCase(wxT("loop")))
+            {
+                loops = true;
+                loopStartSample = label->getT0() * sampleRate;
+                loopStartByte = sampleidx_to_byteidx(label->getT0() * rate);
+                loopEndByte = sampleidx_to_byteidx(label->getT1() * rate);
+                break;
+            }
+        }
+        if (loops)
+            break;
+    }
+
+    short* mixed[2];
+    short coefs[2][16] = {};
+    for (int c=0 ; c<numChannels ; ++c)
+    {
+        mixed[c] = (short*)mixer->GetBuffer(c);
+        DSPCorrelateCoefs(mixed[c], numSamples, coefs[c]);
+    }
+
+    /* Write header */
+    struct stm_header header = {};
+    header.field00 = bswap16(512);
+    header.sampleRate = bswap16(sampleRate);
+    header.numChannels = bswapu32(numChannels);
+    header.adpcmData2Offset = bswapu32(ROUND_UP_32(chanFrames * 8));
+    header.adpcmLoopStartOffset = bswapu32(loopStartByte);
+    header.adpcmData2OffsetAux1 = bswapu32(loopEndByte);
+    header.adpcmData2OffsetAux2 = bswapu32(loopEndByte);
+    header.adpcmLoopOffsetAux1 = 0;
+    if (header.adpcmLoopStartOffset != 0xffffffff)
+        header.adpcmLoopOffsetAux1 = header.adpcmLoopStartOffset;
+    header.adpcmLoopOffsetAux2 = header.adpcmLoopOffsetAux1;
+    fs.Write(&header, sizeof(header));
+
+    /* Write channel headers */
+    for (int c=0 ; c<numChannels ; ++c)
+    {
+        struct dspadpcm_header chanheader = {};
+        chanheader.num_samples = bswapu32(numSamples);
+        chanheader.num_nibbles = bswapu32(chanFrames * 16);
+        chanheader.sample_rate = bswapu32(sampleRate);
+        chanheader.loop_flag = bswap16((uint16_t)loops);
+        if (loops)
+        {
+            chanheader.loop_start_nibble = bswapu32(loopStartByte * 2);
+            chanheader.loop_end_nibble = bswapu32(loopEndByte * 2);
+        }
+        else
+        {
+            chanheader.loop_start_nibble = bswapu32(2);
+            chanheader.loop_end_nibble = bswapu32(ROUND_UP_32(chanFrames * 8) * 2);
+        }
+        for (int i=0 ; i<16 ; ++i)
+            chanheader.coef[i] = bswap16(coefs[c][i]);
+        fs.Write(&chanheader, sizeof(chanheader));
+    }
+
+    TADPCMFrame* adpcmBlock = new TADPCMFrame[4096];
+    short convSamps[2][16] = {};
+
+    /* Write frames */
+    int samplescompleted[2] = {};
+    for (int c=0 ; c<numChannels ; ++c)
+    {
+        while (samplescompleted[c] < numSamples)
+        {
+            int remSamples = numSamples - samplescompleted[c];
+            int writeFrames = std::min(4096, (remSamples + 13) / 14);
+            for (int f=0 ; f<writeFrames ; ++f)
+            {
+                for (int s=0 ; s<14 ; ++s)
+                {
+                    unsigned int sample = samplescompleted[c] + s;
+                    if (sample >= numSamples)
+                        convSamps[c][s+2] = 0;
+                    else
+                        convSamps[c][s+2] = mixed[c][sample];
+                }
+                DSPEncodeFrame(convSamps[c], 14, adpcmBlock[f], coefs[c]);
+                convSamps[c][0] = convSamps[c][14];
+                convSamps[c][1] = convSamps[c][15];
+                samplescompleted[c] += 14;
+            }
+            fs.Write(adpcmBlock, writeFrames * 8);
+
+            if ((updateResult = progress->Update(c*numSamples + samplescompleted[c], numSamples*2)) != eProgressSuccess)
+                break;
+        }
+
+        wxFileOffset offset = fs.Tell();
+        wxFileOffset offRem = ROUND_UP_32(offset) - offset;
+        for (int i=0 ; i<offRem ; ++i)
+            fs.Write("", 1);
+
+        if (updateResult != eProgressSuccess)
+            break;
+    }
+
+    delete progress;
+    delete mixer;
+    delete[] adpcmBlock;
+    return updateResult;
+}
+
 int ExportDSPADPCM::Export(AudacityProject *project,
                            int numChannels,
                            const wxString& fName,
@@ -2598,6 +2812,10 @@ int ExportDSPADPCM::Export(AudacityProject *project,
             return false;
         }
         return ExportRSF(project, numChannels, fName, selectionOnly, t0, t1, mixerSpec);
+    }
+    else if (subformat == mStmFormat)
+    {
+        return ExportSTM(project, numChannels, fName, selectionOnly, t0, t1, mixerSpec);
     }
 
     return eProgressFailed;

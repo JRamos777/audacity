@@ -200,10 +200,17 @@ MixAndRender(TrackList *tracks, TrackFactory *trackFactory,
       return{};
    }
    else {
+#ifdef __AUDACITY_OLD_STD__
       return std::make_pair(
          mixLeft.release(),
          mixRight.release()
       );
+#else
+      return std::make_pair(
+         std::move(mixLeft),
+         std::move(mixRight)
+      );
+#endif
 #if 0
    int elapsedMS = wxGetElapsedTime();
    double elapsedTime = elapsedMS * 0.001;
