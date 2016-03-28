@@ -2676,8 +2676,8 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
     header.numChannels = bswapu32(numChannels);
     header.adpcmData2Offset = bswapu32(ROUND_UP_32(chanFrames * 8));
     header.adpcmLoopStartOffset = bswapu32(loopStartByte);
-    header.adpcmData2OffsetAux1 = bswapu32(loopEndByte);
-    header.adpcmData2OffsetAux2 = bswapu32(loopEndByte);
+    header.adpcmData2OffsetAux1 = header.adpcmData2Offset;
+    header.adpcmData2OffsetAux2 = header.adpcmData2Offset;
     header.adpcmLoopOffsetAux1 = 0;
     if (header.adpcmLoopStartOffset != 0xffffffff)
         header.adpcmLoopOffsetAux1 = header.adpcmLoopStartOffset;
