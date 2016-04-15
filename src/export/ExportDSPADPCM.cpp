@@ -758,7 +758,7 @@ static void DSPEncodeFrame(short* pcmInOut, int sampleCount, unsigned char* adpc
         }
 
         /* Set initial scale */
-        for (scale=0 ; (scale<=12) && ((distance>7) || (distance<-8)); scale++, distance>>=1) ;
+        for (scale=0 ; (scale<=12) && ((distance>7) || (distance<-8)); scale++, distance>>=1) {}
         scale = (scale <= 1) ? -1 : scale - 2;
 
         do
