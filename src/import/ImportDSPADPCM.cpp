@@ -284,6 +284,67 @@ static void SwapSTMHeader(stm_header* h)
     h->adpcmLoopOffsetAux2 = bswapu32(h->adpcmLoopOffsetAux2);
 }
 
+struct bcwav_reference
+{
+    uint16_t id;
+    uint32_t offset;
+};
+
+struct bcwav_sized_reference
+{
+    bcwav_reference ref;
+    uint32_t size;
+};
+
+struct bcwav_header
+{
+    uint32_t magic;
+    uint16_t endianness;
+    uint16_t headerSize;
+    uint32_t version;
+    uint32_t fileSize;
+    uint16_t numChunks;
+    bcwav_sized_reference infoRef;
+    bcwav_sized_reference dataRef;
+};
+
+struct bcwav_chunk_header
+{
+    uint32_t magic;
+    uint32_t size;
+};
+
+struct bcwav_info
+{
+    bcwav_chunk_header header;
+    uint8_t enc;
+    uint8_t loop;
+    uint32_t sampleRate;
+    uint32_t loopStart;
+    uint32_t loopEnd;
+    uint32_t pad;
+    uint32_t chanCount;
+    bcwav_reference chanRefs[];
+};
+
+struct bcwav_channel_info
+{
+    bcwav_reference samplesRef;
+    bcwav_reference adpcmInfoRef;
+    uint32_t pad;
+};
+
+struct bcwav_dspadpcm_info
+{
+    int16_t coef[16];
+    int16_t ps;
+    int16_t hist1;
+    int16_t hist2;
+    int16_t loop_ps;
+    int16_t loop_hist1;
+    int16_t loop_hist2;
+};
+
 static const int nibble_to_int[16] = {0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1};
 
 static inline short samp_clamp(int val) {
@@ -318,7 +379,8 @@ static const wxChar *exts[] =
     wxT("ras"),
     wxT("rsf"),
     wxT("adp"),
-    wxT("stm")
+    wxT("stm"),
+    wxT("bcwav")
 };
 
 /**************************************************************************
@@ -490,6 +552,23 @@ private:
     std::vector<dspadpcm_header> mDSPHeaders;
 };
 
+/* BCWAV file */
+class DSPADPCMBCWAVImportFileHandle : public DSPADPCMBaseImportFileHandle
+{
+public:
+    DSPADPCMBCWAVImportFileHandle(wxFile *file, const wxString& filename);
+    ~DSPADPCMBCWAVImportFileHandle();
+
+    wxString GetFileDescription() { return _("BCWAV Stereo GameCube DSPADPCM"); }
+    int GetFileUncompressedBytes() { return mInfo.loopEnd * mInfo.chanCount * 2; }
+    int Import(TrackFactory *trackFactory, TrackHolders&, Tags *tags);
+
+private:
+    wxFile *mFile;
+    struct bcwav_info mInfo;
+    std::vector<std::pair<uint32_t, bcwav_dspadpcm_info>> mChannels;
+};
+
 /* RSF file */
 class DSPADPCMRSFImportFileHandle : public DSPADPCMBaseImportFileHandle
 {
@@ -565,6 +644,17 @@ ImportFileHandle *DSPADPCMImportPlugin::Open(const wxString& filename)
     {
         DSPADPCMSTMImportFileHandle* fh =
         new DSPADPCMSTMImportFileHandle(file, filename);
+        if (!fh->valid)
+        {
+            delete fh;
+            return NULL;
+        }
+        return fh;
+    }
+    else if (filename.EndsWith(wxT(".bcwav")))
+    {
+        DSPADPCMBCWAVImportFileHandle* fh =
+        new DSPADPCMBCWAVImportFileHandle(file, filename);
         if (!fh->valid)
         {
             delete fh;
@@ -1715,6 +1805,169 @@ int DSPADPCMSTMImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders
 }
 
 DSPADPCMSTMImportFileHandle::~DSPADPCMSTMImportFileHandle()
+{
+    if (mFile)
+    {
+        if (mFile->IsOpened())
+            mFile->Close();
+        delete mFile;
+    }
+}
+
+/**************************************************************************
+ * BCWAV Stereo
+ **************************************************************************/
+
+DSPADPCMBCWAVImportFileHandle::DSPADPCMBCWAVImportFileHandle(wxFile *file, const wxString& filename)
+    :  DSPADPCMBaseImportFileHandle(filename)
+{
+    wxASSERT(file);
+    mFile = file;
+    valid = false;
+
+    bcwav_header header;
+    mFile->Read(&header, sizeof(header));
+
+    if (header.magic != 0x56415743)
+        return;
+
+    mFile->Seek(header.infoRef.ref.offset);
+    mFile->Read(&mInfo, sizeof(mInfo));
+    if (mInfo.enc != 2)
+        return;
+
+    if (!mInfo.chanCount)
+        return;
+
+    valid = true;
+
+    std::vector<uint32_t> chanOffs;
+    chanOffs.reserve(mInfo.chanCount);
+    mChannels.reserve(mInfo.chanCount);
+    for (int c=0 ; c<mInfo.chanCount ; ++c)
+    {
+        bcwav_reference chanRef;
+        mFile->Read(&chanRef, sizeof(chanRef));
+        chanOffs.push_back(header.infoRef.ref.offset + 28 + chanRef.offset);
+    }
+
+    for (int c=0 ; c<mInfo.chanCount ; ++c)
+    {
+        bcwav_channel_info chanInfo;
+        mFile->Seek(chanOffs[c]);
+        mFile->Read(&chanInfo, sizeof(chanInfo));
+
+        mChannels.emplace_back();
+        mChannels[c].first = header.dataRef.ref.offset + 8 + chanInfo.samplesRef.offset;
+        mFile->Seek(chanOffs[c] + chanInfo.adpcmInfoRef.offset);
+        mFile->Read(&mChannels[c].second, sizeof(bcwav_dspadpcm_info));
+    }
+}
+
+int DSPADPCMBCWAVImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders& outTracks, Tags *tags)
+{
+    CreateProgress();
+
+    std::vector<std::unique_ptr<WaveTrack>> channels;
+    channels.reserve(mInfo.chanCount);
+    for (int c=0 ; c<mInfo.chanCount ; ++c)
+    {
+        channels.push_back(trackFactory->NewWaveTrack(int16Sample, mInfo.sampleRate));
+        if (mInfo.chanCount == 2)
+            switch (c)
+            {
+            case 0:
+                channels[c]->SetChannel(Track::LeftChannel);
+                break;
+            case 1:
+                channels[c]->SetChannel(Track::RightChannel);
+                break;
+            default:
+                channels[c]->SetChannel(Track::MonoChannel);
+            }
+    }
+    if (mInfo.chanCount == 2)
+        channels[0]->SetLinked(true);
+
+    int updateResult = eProgressSuccess;
+
+    unsigned long samplescompleted[2] = {};
+    short hist[2][2] = {{0, 0},
+                        {0, 0}};
+
+    /* Compute number of full-sized blocks */
+    TADPCMFrame* adpcmBlock = new TADPCMFrame[4096];
+    short pcmBlock[14];
+    for (int c=0 ; c<mInfo.chanCount ; ++c)
+    {
+        mFile->Seek(mChannels[c].first);
+        fprintf(stderr, "OFFSET %d\n", mChannels[c].first);
+        while (samplescompleted[c] < mInfo.loopEnd)
+        {
+            int remSamples = mInfo.loopEnd - samplescompleted[c];
+            int loadBlks = MIN(4096, (remSamples + 13) / 14);
+            mFile->Read(adpcmBlock, loadBlks * 8);
+            for (int f=0 ; f<loadBlks ; ++f)
+            {
+                unsigned char cIdx = (adpcmBlock[f][0]>>4) & 0xf;
+                short factor1 = mChannels[c].second.coef[cIdx*2];
+                short factor2 = mChannels[c].second.coef[cIdx*2+1];
+                unsigned char exp = adpcmBlock[f][0] & 0xf;
+                int s;
+                for (s=0 ; s<14 && s<remSamples ; ++s) {
+                    int sample_data = (s&1)?
+                    nibble_to_int[(adpcmBlock[f][s/2+1])&0xf]:
+                    nibble_to_int[(adpcmBlock[f][s/2+1]>>4)&0xf];
+                    sample_data <<= exp;
+                    sample_data <<= 11;
+                    sample_data += 1024;
+                    sample_data +=
+                    factor1 * hist[c][0] +
+                    factor2 * hist[c][1];
+                    sample_data >>= 11;
+                    sample_data = samp_clamp(sample_data);
+                    pcmBlock[s] = sample_data;
+                    hist[c][1] = hist[c][0];
+                    hist[c][0] = sample_data;
+                }
+                channels[c]->Append((samplePtr)pcmBlock, int16Sample, (sampleCount)s);
+                samplescompleted[c] += s;
+                remSamples -= s;
+            }
+        }
+    }
+    long long unsigned fc = MAX(samplescompleted[0], samplescompleted[1]);
+    updateResult = mProgress->Update((long long unsigned)fc,
+                                     (long long unsigned)mInfo.loopEnd);
+
+    if (updateResult == eProgressFailed || updateResult == eProgressCancelled)
+    {
+        delete[] adpcmBlock;
+        return updateResult;
+    }
+
+    for (int c=0 ; c<mInfo.chanCount ; ++c)
+    {
+        channels[c]->Flush();
+        outTracks.push_back(std::move(channels[c]));
+    }
+
+    /* Add loop label */
+    if (mInfo.loop)
+    {
+        std::unique_ptr<LabelTrack> lt = trackFactory->NewLabelTrack();
+        double sr = mInfo.sampleRate;
+        lt->AddLabel(SelectedRegion(
+                     mInfo.loopStart / sr,
+                     mInfo.loopEnd / sr), wxT("LOOP"));
+        outTracks.push_back(std::move(lt));
+    }
+
+    delete[] adpcmBlock;
+    return updateResult;
+}
+
+DSPADPCMBCWAVImportFileHandle::~DSPADPCMBCWAVImportFileHandle()
 {
     if (mFile)
     {
