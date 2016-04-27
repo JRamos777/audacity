@@ -1900,7 +1900,6 @@ int DSPADPCMBCWAVImportFileHandle::Import(TrackFactory *trackFactory, TrackHolde
     for (int c=0 ; c<mInfo.chanCount ; ++c)
     {
         mFile->Seek(mChannels[c].first);
-        fprintf(stderr, "OFFSET %d\n", mChannels[c].first);
         while (samplescompleted[c] < mInfo.loopEnd)
         {
             int remSamples = mInfo.loopEnd - samplescompleted[c];

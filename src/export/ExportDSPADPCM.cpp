@@ -2700,7 +2700,7 @@ int ExportDSPADPCM::ExportBCWAV(AudacityProject *project,
     {
         bcwav_reference ref = {};
         ref.id = 0x7100 + i;
-        ref.offset = 12 + i * (sizeof(bcwav_dspadpcm_info) + 20);
+        ref.offset = 4 + 8 * numChannels + i * (sizeof(bcwav_dspadpcm_info) + 20);
         fs.Write(&ref, sizeof(ref));
     }
 
@@ -2766,7 +2766,7 @@ int ExportDSPADPCM::ExportBCWAV(AudacityProject *project,
                     convSamps[c][1] = convSamps[c][15];
                 }
                 else
-                    memset(adpcmBlock[f], 0, 8);
+                    break;
             }
             fs.Write(adpcmBlock, f*8);
             if ((updateResult = progress->Update(curSample[0] + curSample[1], numSamples * numChannels)) != eProgressSuccess)
