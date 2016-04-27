@@ -285,7 +285,6 @@ struct bcwav_info
     uint32_t loopEnd;
     uint32_t pad;
     uint32_t chanCount;
-    bcwav_reference chanRefs[];
 };
 
 struct bcwav_channel_info
