@@ -305,6 +305,14 @@ struct bcwav_dspadpcm_info
     int16_t loop_hist2;
 };
 
+struct gcub_header
+{
+    uint32_t chanCount;
+    uint32_t sampleRate;
+    uint32_t endOffset;
+    int16_t coef[2][16];
+};
+
 struct dkctf_labl
 {
     uint32_t unk0[2];
@@ -1618,6 +1626,7 @@ class ExportDSPADPCM : public ExportPlugin
     int mFsbFormat;
     int mRasFormat;
     int mBcwavFormat;
+    int mGCubFormat;
     int mRsfFormat;
     int mStmFormat;
 public:
@@ -1671,6 +1680,13 @@ private:
                     double t0,
                     double t1,
                     MixerSpec *mixerSpec);
+    int ExportGCUB(AudacityProject *project,
+                   int numChannels,
+                   const wxString& fName,
+                   bool selectionOnly,
+                   double t0,
+                   double t1,
+                   MixerSpec *mixerSpec);
     int ExportRSF(AudacityProject *project,
                   int numChannels,
                   const wxString& fName,
@@ -1726,6 +1742,13 @@ ExportDSPADPCM::ExportDSPADPCM()
     SetDescription(wxT("Nintendo GameCube DSPADPCM (.bcwav)"), mBcwavFormat);
     SetMaxChannels(2, mBcwavFormat);
     AddExtension(wxT("bcwav"), mBcwavFormat);
+
+    mGCubFormat = AddFormat() - 1;
+    SetFormat(wxT("GCUB"), mGCubFormat);
+    SetCanMetaData(false, mGCubFormat);
+    SetDescription(wxT("Nintendo GameCube DSPADPCM (.gcub)"), mGCubFormat);
+    SetMaxChannels(2, mGCubFormat);
+    AddExtension(wxT("gcub"), mGCubFormat);
 
     mStmFormat = AddFormat() - 1;
     SetFormat(wxT("STM"), mStmFormat);
@@ -2790,6 +2813,130 @@ int ExportDSPADPCM::ExportBCWAV(AudacityProject *project,
     return updateResult;
 }
 
+int ExportDSPADPCM::ExportGCUB(AudacityProject *project,
+                               int numChannels,
+                               const wxString& fName,
+                               bool selectionOnly,
+                               double t0,
+                               double t1,
+                               MixerSpec *mixerSpec)
+{
+    double       rate = project->GetRate();
+    TrackList   *tracks = project->GetTracks();
+
+    unsigned int sampleRate = (unsigned int)(rate + 0.5);
+    unsigned int sampleFrames = (unsigned int)((t1 - t0)*rate + 0.5);
+
+    wxFile fs;   // will be closed when it goes out of scope
+    if (!fs.Open(fName, wxFile::write)) {
+        wxMessageBox(wxString::Format(_("Cannot export audio to %s"),
+                                      fName.c_str()));
+        return false;
+    }
+
+    int updateResult = eProgressSuccess;
+
+    const WaveTrackConstArray waveTracks =
+      tracks->GetWaveTrackConstArray(selectionOnly, false);
+    Mixer *mixer = CreateMixer(waveTracks,
+                               tracks->GetTimeTrack(),
+                               t0, t1,
+                               numChannels, sampleFrames, false,
+                               rate, int16Sample, true, mixerSpec);
+
+    ProgressDialog *progress = new ProgressDialog(wxFileName(fName).GetName(),
+                                                  selectionOnly ?
+                                                      _("Exporting the selected audio as GCUB DSPADPCM") :
+                                                      _("Exporting the entire project as GCUB DSPADPCM"));
+
+    sampleCount numSamples = mixer->Process(sampleFrames);
+    if (numSamples <= 2)
+    {
+        delete progress;
+        delete mixer;
+        return eProgressFailed;
+    }
+
+    short* mixed[2];
+    short coefs[2][16] = {};
+    for (int c=0 ; c<numChannels ; ++c)
+    {
+        mixed[c] = (short*)mixer->GetBuffer(c);
+        DSPCorrelateCoefs(mixed[c], numSamples, coefs[c]);
+    }
+
+    /* Compute sample/block/frame counts */
+    unsigned chanFullFrames = (numSamples + 13) / 14;
+    unsigned chanFullBlocks = (chanFullFrames + 4095) / 4096;
+
+    /* Write header */
+    struct gcub_header header = {};
+    header.chanCount = bswapu32(numChannels);
+    header.sampleRate = bswapu32(sampleRate);
+    header.endOffset = bswapu32(chanFullFrames * numChannels * 8 + 0x88);
+    for (int i=0 ; i<16 ; ++i)
+        header.coef[0][i] = bswap16(coefs[0][i]);
+    for (int i=0 ; i<16 ; ++i)
+        header.coef[1][i] = bswap16(coefs[1][i]);
+    fs.Write("GCub", 4);
+    fs.Write(&header, sizeof(header));
+
+    uint32_t zero = 0;
+    for (int i=0 ; i<4 ; ++i)
+        fs.Write(&zero, 4);
+
+    if (numChannels == 1)
+    {
+        fs.Write("GCxx", 4);
+        fs.Write(&zero, 4);
+        fs.Write(&header.coef[0], 32);
+    }
+
+    uint8_t initPs = 0;
+    TADPCMFrame* adpcmBlock = new TADPCMFrame[4096];
+    short convSamps[2][16] = {};
+
+    /* Write full-blocks */
+    for (int b=0 ; b<chanFullBlocks ; ++b)
+    {
+        for (int c=0 ; c<numChannels ; ++c)
+        {
+            for (int f=0 ; f<4096 ; ++f)
+            {
+                for (int s=0 ; s<14 ; ++s)
+                {
+                    unsigned int sample = (b*4096+f)*14+s;
+                    if (sample >= numSamples)
+                        convSamps[c][s+2] = 0;
+                    else
+                        convSamps[c][s+2] = mixed[c][sample];
+                }
+                DSPEncodeFrame(convSamps[c], 14, adpcmBlock[f], coefs[c]);
+                convSamps[c][0] = convSamps[c][14];
+                convSamps[c][1] = convSamps[c][15];
+            }
+            fs.Write(adpcmBlock, 4096 * 8);
+        }
+
+        if (b == 0)
+            initPs = adpcmBlock[0][0];
+
+        if ((updateResult = progress->Update((unsigned int)b*4096*14, numSamples)) != eProgressSuccess)
+            break;
+    }
+
+    if (numChannels == 1)
+    {
+        fs.Seek(0x51, wxFromStart);
+        fs.Write(&initPs, 1);
+    }
+
+    delete progress;
+    delete mixer;
+    delete[] adpcmBlock;
+    return updateResult;
+}
+
 int ExportDSPADPCM::ExportRSF(AudacityProject *project,
                               int numChannels,
                               const wxString& fName,
@@ -3092,6 +3239,10 @@ int ExportDSPADPCM::Export(AudacityProject *project,
     else if (subformat == mBcwavFormat)
     {
         return ExportBCWAV(project, numChannels, fName, selectionOnly, t0, t1, mixerSpec);
+    }
+    else if (subformat == mGCubFormat)
+    {
+        return ExportGCUB(project, numChannels, fName, selectionOnly, t0, t1, mixerSpec);
     }
     else if (subformat == mRsfFormat)
     {
