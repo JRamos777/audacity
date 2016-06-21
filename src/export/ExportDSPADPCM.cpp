@@ -453,7 +453,7 @@ static bool AnalyzeRanges(tvec mtx[3], int* vecIdxsOut)
             }
         }
 
-        if (maxIndex == i)
+        if (maxIndex != i)
         {
             for (int y=1 ; y<=2 ; y++)
             {
@@ -1911,6 +1911,8 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             break;
     }
 
+    bool psAdded[2] = {};
+    int16_t ps[2] = {};
     bool loopHistAdded[2][2] = {};
     int16_t loopHist[2][2] = {};
     wxFileOffset dspHeaderOff[2] = {};
@@ -2019,6 +2021,11 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             }
 
             DSPEncodeFrame(convSamps, MIN(14, packetCount * 14 - writtenSamples), block, coefs);
+            if (!psAdded[c])
+            {
+                psAdded[c] = true;
+                ps[c] = block[0];
+            }
 
             /* Resolve loop sample */
             if (!loopHistAdded[c][0] &&
@@ -2047,6 +2054,20 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
         }
         if (updateResult != eProgressSuccess)
             break;
+    }
+
+    if (psAdded[0])
+    {
+        f[0].Seek(dspHeaderOff[0] + offsetof(struct dspadpcm_header, ps));
+        uint16_t sps = bswap16(ps[0]);
+        f[0].Write(&sps, 2);
+    }
+
+    if (psAdded[1])
+    {
+        f[1].Seek(dspHeaderOff[1] + offsetof(struct dspadpcm_header, ps));
+        uint16_t sps = bswap16(ps[1]);
+        f[1].Write(&sps, 2);
     }
 
     if (loopHistAdded[0][0] && loopHistAdded[0][1])
