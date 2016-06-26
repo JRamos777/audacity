@@ -2030,7 +2030,7 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             /* Standard DSP and DKCTF use nibble indices for loop addressing */
             header.loop_start_nibble = bswapu32(GetNibbleAddress(0));
             header.loop_end_nibble = bswapu32(GetNibbleAddress(numSamples - 1));
-            header.ca = __builtin_bswap32(GetNibbleAddress(0));
+            header.ca = bswapu32(GetNibbleAddress(0));
         }
         if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF) /* DKCTF uses this 'ca' field for channel count */
             header.ca = bswapu32(numChannels);
