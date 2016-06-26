@@ -98,6 +98,37 @@ static inline unsigned sampleidx_to_byteidx(unsigned sampleidx)
     return frame * 8 + frame_samp / 2 + 1;
 }
 
+static int GetNibbleFromSample(int samples)
+{
+    int packets = samples / 14;
+    int extraSamples = samples % 14;
+    int extraNibbles = extraSamples == 0 ? 0 : extraSamples + 2;
+
+    return 16 * packets + extraNibbles;
+}
+
+static int GetNibbleAddress(int sample)
+{
+    int packets = sample / 14;
+    int extraSamples = sample % 14;
+
+    return 16 * packets + extraSamples + 2;
+}
+
+static int GetBytesForAdpcmSamples(int samples)
+{
+    int extraBytes = 0;
+    int packets = samples / 14;
+    int extraSamples = samples % 14;
+
+    if (extraSamples != 0)
+    {
+        extraBytes = (extraSamples / 2) + (extraSamples % 2) + 1;
+    }
+
+    return 8 * packets + extraBytes;
+}
+
 /* Standard DSPADPCM header */
 struct dspadpcm_header
 {
@@ -108,7 +139,7 @@ struct dspadpcm_header
     uint16_t format; /* 0 for ADPCM */
     uint32_t loop_start_nibble;
     uint32_t loop_end_nibble;
-    uint32_t zero;
+    uint32_t ca;
     int16_t coef[16];
     int16_t gain;
     int16_t ps;
@@ -1984,8 +2015,8 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
 
         dspHeaderOff[c] = f[c].Tell();
         struct dspadpcm_header header = {};
-        header.num_samples = bswapu32(numSamples-2);
-        header.num_nibbles = bswapu32(packetCount*16);
+        header.num_samples = bswapu32(numSamples);
+        header.num_nibbles = bswapu32(GetNibbleFromSample(numSamples));
         header.sample_rate = bswapu32(sampleRate);
         header.loop_flag = bswap16((int16_t)loops);
         if (csmp && csmpLayout == DSPADPCM_CSMP_MP3)
@@ -1997,11 +2028,12 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
         else
         {
             /* Standard DSP and DKCTF use nibble indices for loop addressing */
-            header.loop_start_nibble = bswapu32(loopStartNibble);
-            header.loop_end_nibble = bswapu32(loopEndNibble);
+            header.loop_start_nibble = bswapu32(GetNibbleAddress(0));
+            header.loop_end_nibble = bswapu32(GetNibbleAddress(numSamples - 1));
+            header.ca = __builtin_bswap32(GetNibbleAddress(0));
         }
-        if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF) /* DKCTF uses this 'zero' field for channel count */
-            header.zero = bswapu32(numChannels);
+        if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF) /* DKCTF uses this 'ca' field for channel count */
+            header.ca = bswapu32(numChannels);
         for (int i=0 ; i<16 ; ++i)
             header.coef[i] = bswap16(coefs[i]);
         f[c].Write(&header, sizeof(header));
@@ -2011,16 +2043,12 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
         unsigned int writtenSamples = 0;
         for (int p=0 ; p<packetCount ; ++p)
         {
-            for (int s=0 ; s<14 ; ++s)
-            {
-                unsigned int sample = p*14+s;
-                if (sample >= numSamples)
-                    convSamps[s+2] = 0;
-                else
-                    convSamps[s+2] = mixed[sample];
-            }
+            memset(convSamps + 2, 0, 14 * sizeof(int16_t));
+            int ns = MIN(numSamples - p * 14, 14);
+            for (int s=0 ; s<ns; ++s)
+                convSamps[s+2] = mixed[p*14+s];
 
-            DSPEncodeFrame(convSamps, MIN(14, packetCount * 14 - writtenSamples), block, coefs);
+            DSPEncodeFrame(convSamps, 14, block, coefs);
             if (!psAdded[c])
             {
                 psAdded[c] = true;
@@ -2046,7 +2074,7 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             convSamps[0] = convSamps[14];
             convSamps[1] = convSamps[15];
 
-            f[c].Write(block, 8);
+            f[c].Write(block, GetBytesForAdpcmSamples(ns));
             writtenSamples += 14;
             if (!(p%1024))
                 if ((updateResult = progress->Update(writtenSamples, numSamples)) != eProgressSuccess)
