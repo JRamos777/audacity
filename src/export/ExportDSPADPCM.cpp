@@ -693,7 +693,7 @@ static void FilterRecords(tvec vecBest[8], int exp, tvec records[], int recordCo
     }
 }
 
-static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut)
+static void DSPCorrelateCoefs(const short* source, int samples, short coefsOut[8][2])
 {
     int numFrames = (samples + 13) / 14;
     int frameSamples;
@@ -794,15 +794,15 @@ static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut)
         double d;
         d = -vecBest[z][1] * 2048.0;
         if (d > 0.0)
-            coefsOut[z*2] = (d > 32767.0) ? (short)32767 : (short)lround(d);
+            coefsOut[z][0] = (d > 32767.0) ? (short)32767 : (short)lround(d);
         else
-            coefsOut[z*2] = (d < -32768.0) ? (short)-32768 : (short)lround(d);
+            coefsOut[z][0] = (d < -32768.0) ? (short)-32768 : (short)lround(d);
 
         d = -vecBest[z][2] * 2048.0;
         if (d > 0.0)
-            coefsOut[z*2+1] = (d > 32767.0) ? (short)32767 : (short)lround(d);
+            coefsOut[z][1] = (d > 32767.0) ? (short)32767 : (short)lround(d);
         else
-            coefsOut[z*2+1] = (d < -32768.0) ? (short)-32768 : (short)lround(d);
+            coefsOut[z][1] = (d < -32768.0) ? (short)-32768 : (short)lround(d);
     }
 
     /* Free memory */
@@ -1932,7 +1932,7 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
     for (int c=0 ; c<numChannels ; ++c)
     {
         short* mixed = (short*)mixer->GetBuffer(c);
-        short coefs[16];
+        short coefs[8][2];
         DSPCorrelateCoefs(mixed, numSamples, coefs);
 
         if (csmp)
@@ -2014,8 +2014,11 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
         }
         if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF) /* DKCTF uses this 'ca' field for channel count */
             header.ca = bswapu32(numChannels);
-        for (int i=0 ; i<16 ; ++i)
-            header.coef[i] = bswap16(coefs[i]);
+        for (int i=0 ; i<8 ; ++i)
+        {
+            header.coef[i*2] = bswap16(coefs[i][0]);
+            header.coef[i*2+1] = bswap16(coefs[i][1]);
+        }
         f[c].Write(&header, sizeof(header));
 
         short convSamps[16] = {};
@@ -2171,7 +2174,7 @@ int ExportDSPADPCM::ExportRS03(AudacityProject *project,
     }
 
     short* mixed[2];
-    short coefs[2][16] = {};
+    short coefs[2][8][2] = {};
     for (int c=0 ; c<numChannels ; ++c)
     {
         mixed[c] = (short*)mixer->GetBuffer(c);
@@ -2196,10 +2199,16 @@ int ExportDSPADPCM::ExportRS03(AudacityProject *project,
     header.loop_flag = bswap16((uint16_t)loops);
     header.loop_start = bswapu32(loopStartByte);
     header.loop_end = bswapu32(loopEndByte);
-    for (int i=0 ; i<16 ; ++i)
-        header.coefs[0][i] = bswap16(coefs[0][i]);
-    for (int i=0 ; i<16 ; ++i)
-        header.coefs[1][i] = bswap16(coefs[1][i]);
+    for (int i=0 ; i<8 ; ++i)
+    {
+        header.coefs[0][i*2] = bswap16(coefs[0][i][0]);
+        header.coefs[0][i*2+1] = bswap16(coefs[0][i][1]);
+    }
+    for (int i=0 ; i<8 ; ++i)
+    {
+        header.coefs[1][i*2] = bswap16(coefs[1][i][0]);
+        header.coefs[1][i*2+1] = bswap16(coefs[1][i][1]);
+    }
     fs.Write("RS\x00\x03", 4);
     fs.Write(&header, sizeof(header));
 
@@ -2334,7 +2343,7 @@ int ExportDSPADPCM::ExportFSB31(AudacityProject *project,
     }
 
     short* mixed[2];
-    short coefs[2][16] = {};
+    short coefs[2][8][2] = {};
     for (int c=0 ; c<numChannels ; ++c)
     {
         mixed[c] = (short*)mixer->GetBuffer(c);
@@ -2374,8 +2383,11 @@ int ExportDSPADPCM::ExportFSB31(AudacityProject *project,
     for (int c=0 ; c<numChannels ; ++c)
     {
         fsb_dspadpcm_channel fsbChan = {};
-        for (int i=0 ; i<16 ; ++i)
-            fsbChan.coef[i] = bswap16(coefs[c][i]);
+        for (int i=0 ; i<8 ; ++i)
+        {
+            fsbChan.coef[i*2] = bswap16(coefs[c][i][0]);
+            fsbChan.coef[i*2+1] = bswap16(coefs[c][i][1]);
+        }
         fs.Write(&fsbChan, sizeof(fsbChan));
     }
 
@@ -2528,7 +2540,7 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
     }
 
     short* mixed[2];
-    short coefs[2][16] = {};
+    short coefs[2][8][2] = {};
     for (int c=0 ; c<numChannels ; ++c)
     {
         mixed[c] = (short*)mixer->GetBuffer(c);
@@ -2566,8 +2578,11 @@ int ExportDSPADPCM::ExportRAS(AudacityProject *project,
     for (int c=0 ; c<numChannels ; ++c)
     {
         ras_dspadpcm_channel rasChan = {};
-        for (int i=0 ; i<16 ; ++i)
-            rasChan.coefs[i] = coefs[c][i];
+        for (int i=0 ; i<8 ; ++i)
+        {
+            rasChan.coefs[i*2] = coefs[c][i][0];
+            rasChan.coefs[i*2+1] = coefs[c][i][1];
+        }
         SwapRASChannel(&rasChan);
         fs.Write(&rasChan, sizeof(rasChan));
     }
@@ -2703,7 +2718,7 @@ int ExportDSPADPCM::ExportBCWAV(AudacityProject *project,
     }
 
     short* mixed[2];
-    short coefs[2][16] = {};
+    short coefs[2][8][2] = {};
     for (int c=0 ; c<numChannels ; ++c)
     {
         mixed[c] = (short*)mixer->GetBuffer(c);
@@ -2887,7 +2902,7 @@ int ExportDSPADPCM::ExportGCUB(AudacityProject *project,
     }
 
     short* mixed[2];
-    short coefs[2][16] = {};
+    short coefs[2][8][2] = {};
     for (int c=0 ; c<numChannels ; ++c)
     {
         mixed[c] = (short*)mixer->GetBuffer(c);
@@ -2903,10 +2918,16 @@ int ExportDSPADPCM::ExportGCUB(AudacityProject *project,
     header.chanCount = bswapu32(numChannels);
     header.sampleRate = bswapu32(sampleRate);
     header.endOffset = bswapu32(chanFullFrames * numChannels * 8 + 0x88);
-    for (int i=0 ; i<16 ; ++i)
-        header.coef[0][i] = bswap16(coefs[0][i]);
-    for (int i=0 ; i<16 ; ++i)
-        header.coef[1][i] = bswap16(coefs[1][i]);
+    for (int i=0 ; i<8 ; ++i)
+    {
+        header.coef[0][i*2] = bswap16(coefs[0][i][0]);
+        header.coef[0][i*2+1] = bswap16(coefs[0][i][1]);
+    }
+    for (int i=0 ; i<8 ; ++i)
+    {
+        header.coef[1][i*2] = bswap16(coefs[1][i][0]);
+        header.coef[1][i*2+1] = bswap16(coefs[1][i][1]);
+    }
     fs.Write("GCub", 4);
     fs.Write(&header, sizeof(header));
 
@@ -3123,7 +3144,7 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
     }
 
     short* mixed[2];
-    short coefs[2][16] = {};
+    short coefs[2][8][2] = {};
     for (int c=0 ; c<numChannels ; ++c)
     {
         mixed[c] = (short*)mixer->GetBuffer(c);
@@ -3163,8 +3184,11 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
             chanheader.loop_start_nibble = bswapu32(2);
             chanheader.loop_end_nibble = bswapu32(ROUND_UP_32(chanFrames * 8) * 2);
         }
-        for (int i=0 ; i<16 ; ++i)
-            chanheader.coef[i] = bswap16(coefs[c][i]);
+        for (int i=0 ; i<8 ; ++i)
+        {
+            chanheader.coef[i*2] = bswap16(coefs[c][i][0]);
+            chanheader.coef[i*2+1] = bswap16(coefs[c][i][1]);
+        }
         fs.Write(&chanheader, sizeof(chanheader));
     }
 
