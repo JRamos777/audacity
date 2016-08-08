@@ -812,7 +812,7 @@ static void DSPCorrelateCoefs(const short* source, int samples, short* coefsOut)
 }
 
 /* Make sure source includes the yn values (16 samples total) */
-static void DSPEncodeFrame(short* pcmInOut, int sampleCount, unsigned char* adpcmOut, const short* coefsIn)
+static void DSPEncodeFrame(short pcmInOut[16], int sampleCount, unsigned char adpcmOut[8], const short coefsIn[8][2])
 {
     int inSamples[8][16];
     int outSamples[8][14];
