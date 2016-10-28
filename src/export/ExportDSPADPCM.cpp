@@ -1899,8 +1899,8 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
     bool loops = false;
     uint32_t loopStartSample = 0;
     uint32_t loopStartNibble = 0;
-    uint32_t loopEndSample = 0;
-    uint32_t loopEndNibble = 0;
+    uint32_t loopEndSample = numSamples - 1;
+    uint32_t loopEndNibble = sampleidx_to_nibbleidx(loopEndSample);
     for (labelTrack = (LabelTrack*)labelIt.First(tracks);
          labelTrack;
          labelTrack = (LabelTrack*)labelIt.Next())
@@ -1926,6 +1926,7 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
     int16_t ps[2] = {};
     bool loopHistAdded[2][2] = {};
     int16_t loopHist[2][2] = {};
+    int16_t loopPs[2] = {};
     wxFileOffset dspHeaderOff[2] = {};
 
     /* Encode samples */
@@ -2008,9 +2009,9 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
         else
         {
             /* Standard DSP and DKCTF use nibble indices for loop addressing */
-            header.loop_start_nibble = bswapu32(GetNibbleAddress(0));
-            header.loop_end_nibble = bswapu32(GetNibbleAddress(numSamples - 1));
-            header.ca = bswapu32(GetNibbleAddress(0));
+            header.loop_start_nibble = bswapu32(GetNibbleAddress(loopStartSample));
+            header.loop_end_nibble = bswapu32(GetNibbleAddress(loopEndSample));
+            header.ca = bswapu32(GetNibbleAddress(loopStartSample));
         }
         if (csmp && csmpLayout == DSPADPCM_CSMP_DKCTF) /* DKCTF uses this 'ca' field for channel count */
             header.ca = bswapu32(numChannels);
@@ -2045,6 +2046,7 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             {
                 loopHistAdded[c][0] = true;
                 loopHist[c][0] = convSamps[loopStartSample-writtenSamples-1];
+                loopPs[c] = block[0];
             }
             if (!loopHistAdded[c][1] &&
                 writtenSamples <= loopStartSample - 2 &&
@@ -2052,6 +2054,7 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
             {
                 loopHistAdded[c][1] = true;
                 loopHist[c][1] = convSamps[loopStartSample-writtenSamples-2];
+                loopPs[c] = block[0];
             }
 
             convSamps[0] = convSamps[14];
@@ -2085,7 +2088,9 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
     {
         loopHist[0][0] = bswap16(loopHist[0][0]);
         loopHist[0][1] = bswap16(loopHist[0][1]);
-        f[0].Seek(dspHeaderOff[0] + offsetof(struct dspadpcm_header, loop_hist1));
+        loopPs[0] = bswap16(loopPs[0]);
+        f[0].Seek(dspHeaderOff[0] + offsetof(struct dspadpcm_header, loop_ps));
+        f[0].Write(&loopPs[0], 2);
         f[0].Write(loopHist[0], 4);
     }
 
@@ -2093,7 +2098,9 @@ int ExportDSPADPCM::ExportStandard(AudacityProject *project,
     {
         loopHist[1][0] = bswap16(loopHist[1][0]);
         loopHist[1][1] = bswap16(loopHist[1][1]);
-        f[1].Seek(dspHeaderOff[1] + offsetof(struct dspadpcm_header, loop_hist1));
+        loopPs[1] = bswap16(loopPs[1]);
+        f[1].Seek(dspHeaderOff[1] + offsetof(struct dspadpcm_header, loop_ps));
+        f[1].Write(&loopPs[1], 2);
         f[1].Write(loopHist[1], 4);
     }
 
@@ -3121,8 +3128,8 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
     const LabelTrack* labelTrack;
     bool loops = false;
     uint32_t loopStartSample = 0;
-    uint32_t loopStartByte = 0xffffffff;
-    uint32_t loopEndByte = ROUND_UP_32(chanFrames * 8);
+    uint32_t loopStartNibble = 0xffffffff;
+    uint32_t loopEndNibble = ROUND_UP_32(chanFrames * 16);
     for (labelTrack = (LabelTrack*)labelIt.First(tracks);
          labelTrack;
          labelTrack = (LabelTrack*)labelIt.Next())
@@ -3134,8 +3141,8 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
             {
                 loops = true;
                 loopStartSample = label->getT0() * sampleRate;
-                loopStartByte = sampleidx_to_byteidx(label->getT0() * rate);
-                loopEndByte = sampleidx_to_byteidx(label->getT1() * rate);
+                loopStartNibble = sampleidx_to_nibbleidx(label->getT0() * rate);
+                loopEndNibble = sampleidx_to_nibbleidx(label->getT1() * rate);
                 break;
             }
         }
@@ -3156,8 +3163,8 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
     header.field00 = bswap16(512);
     header.sampleRate = bswap16(sampleRate);
     header.numChannels = bswapu32(numChannels);
-    header.adpcmData2Offset = bswapu32(ROUND_UP_32(chanFrames * 8));
-    header.adpcmLoopStartOffset = bswapu32(loopStartByte);
+    header.adpcmData2Offset = bswapu32(chanFrames * 8);
+    header.adpcmLoopStartOffset = bswapu32((loopStartNibble / 2) & ~7);
     header.adpcmData2OffsetAux1 = header.adpcmData2Offset;
     header.adpcmData2OffsetAux2 = header.adpcmData2Offset;
     header.adpcmLoopOffsetAux1 = 0;
@@ -3176,8 +3183,8 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
         chanheader.loop_flag = bswap16((uint16_t)loops);
         if (loops)
         {
-            chanheader.loop_start_nibble = bswapu32(loopStartByte * 2);
-            chanheader.loop_end_nibble = bswapu32(loopEndByte * 2);
+            chanheader.loop_start_nibble = bswapu32(loopStartNibble);
+            chanheader.loop_end_nibble = bswapu32(loopEndNibble);
         }
         else
         {
@@ -3194,6 +3201,12 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
 
     TADPCMFrame* adpcmBlock = new TADPCMFrame[4096];
     short convSamps[2][16] = {};
+
+    bool psAdded[2] = {};
+    int16_t ps[2] = {};
+    bool loopHistAdded[2][2] = {};
+    int16_t loopHist[2][2] = {};
+    int16_t loopPs[2] = {};
 
     /* Write frames */
     int samplescompleted[2] = {};
@@ -3213,7 +3226,31 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
                     else
                         convSamps[c][s+2] = mixed[c][sample];
                 }
+
                 DSPEncodeFrame(convSamps[c], 14, adpcmBlock[f], coefs[c]);
+                if (!psAdded[c])
+                {
+                    psAdded[c] = true;
+                    ps[c] = adpcmBlock[f][0];
+                }
+
+                /* Resolve loop sample */
+                if (!loopHistAdded[c][0] &&
+                    samplescompleted[c] <= loopStartSample - 1 &&
+                    samplescompleted[c] + 14 > loopStartSample - 1)
+                {
+                    loopHistAdded[c][0] = true;
+                    loopHist[c][0] = convSamps[c][loopStartSample-samplescompleted[c]-1];
+                    loopPs[c] = adpcmBlock[f][0];
+                }
+                if (!loopHistAdded[c][1] &&
+                    samplescompleted[c] <= loopStartSample - 2 &&
+                    samplescompleted[c] + 14 > loopStartSample - 2)
+                {
+                    loopHistAdded[c][1] = true;
+                    loopHist[c][1] = convSamps[c][loopStartSample-samplescompleted[c]-2];
+                }
+
                 convSamps[c][0] = convSamps[c][14];
                 convSamps[c][1] = convSamps[c][15];
                 samplescompleted[c] += 14;
@@ -3231,6 +3268,40 @@ int ExportDSPADPCM::ExportSTM(AudacityProject *project,
 
         if (updateResult != eProgressSuccess)
             break;
+    }
+
+    if (psAdded[0])
+    {
+        fs.Seek(sizeof(header) + offsetof(struct dspadpcm_header, ps));
+        uint16_t sps = bswap16(ps[0]);
+        fs.Write(&sps, 2);
+    }
+
+    if (psAdded[1])
+    {
+        fs.Seek(sizeof(header) + sizeof(struct dspadpcm_header) + offsetof(struct dspadpcm_header, ps));
+        uint16_t sps = bswap16(ps[1]);
+        fs.Write(&sps, 2);
+    }
+
+    if (loopHistAdded[0][0] && loopHistAdded[0][1])
+    {
+        loopHist[0][0] = bswap16(loopHist[0][0]);
+        loopHist[0][1] = bswap16(loopHist[0][1]);
+        loopPs[0] = bswap16(loopPs[0]);
+        fs.Seek(sizeof(header) + offsetof(struct dspadpcm_header, loop_ps));
+        fs.Write(&loopPs[0], 2);
+        fs.Write(loopHist[0], 4);
+    }
+
+    if (loopHistAdded[1][0] && loopHistAdded[1][1])
+    {
+        loopHist[1][0] = bswap16(loopHist[1][0]);
+        loopHist[1][1] = bswap16(loopHist[1][1]);
+        loopPs[1] = bswap16(loopPs[1]);
+        fs.Seek(sizeof(header) + sizeof(struct dspadpcm_header) + offsetof(struct dspadpcm_header, loop_ps));
+        fs.Write(&loopPs[1], 2);
+        fs.Write(loopHist[1], 4);
     }
 
     delete progress;

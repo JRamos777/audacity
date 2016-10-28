@@ -18,6 +18,8 @@
 
 *//*******************************************************************/
 
+#define ROUND_UP_32(val) (((val) + 31) & ~31)
+
 #include <stdint.h>
 #include <string.h>
 
@@ -1788,7 +1790,7 @@ int DSPADPCMSTMImportFileHandle::Import(TrackFactory *trackFactory, TrackHolders
     for (int c=0 ; c<mHeader.numChannels ; ++c)
     {
         if (c == 1)
-            mFile->Seek(64 + 96 * mHeader.numChannels + mHeader.adpcmData2Offset);
+            mFile->Seek(64 + 96 * mHeader.numChannels + ROUND_UP_32(mHeader.adpcmData2Offset));
         while (samplescompleted[c] < mDSPHeaders[c].num_samples)
         {
             int remSamples = mDSPHeaders[c].num_samples - samplescompleted[c];
