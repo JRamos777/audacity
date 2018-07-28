@@ -68,7 +68,7 @@
 #if defined(IS_BETA)
    #define AUDACITY_SUFFIX wxT("-beta-") __TDATE__
 #elif defined(IS_ALPHA)
-   #define AUDACITY_SUFFIX wxT("-alpha-") __TDATE__
+   #define AUDACITY_SUFFIX wxT("-gc-dspadpcm-") __TDATE__
 #else
    #define AUDACITY_SUFFIX    wxT("") // for a stable release
    //#define AUDACITY_SUFFIX wxT("x  ") __TDATE__

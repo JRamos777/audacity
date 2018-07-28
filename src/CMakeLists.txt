@@ -306,6 +306,7 @@ set( EXPORT_SOURCE
    ${CMAKE_SOURCE_DIRECTORY}export/ExportMultiple.cpp
    ${CMAKE_SOURCE_DIRECTORY}export/ExportOGG.cpp
    ${CMAKE_SOURCE_DIRECTORY}export/ExportPCM.cpp
+   ${CMAKE_SOURCE_DIRECTORY}export/ExportDSPADPCM.cpp
 )
 source_group( export FILES ${EXPORT_SOURCE} )
 
@@ -321,6 +322,7 @@ set( IMPORT_SOURCE
    ${CMAKE_SOURCE_DIRECTORY}import/ImportMP3.cpp
    ${CMAKE_SOURCE_DIRECTORY}import/ImportOGG.cpp
    ${CMAKE_SOURCE_DIRECTORY}import/ImportPCM.cpp
+   ${CMAKE_SOURCE_DIRECTORY}import/ImportDSPADPCM.cpp
    ${CMAKE_SOURCE_DIRECTORY}import/ImportQT.cpp
    ${CMAKE_SOURCE_DIRECTORY}import/ImportRaw.cpp
    ${CMAKE_SOURCE_DIRECTORY}import/MultiFormatReader.cpp

@@ -51,6 +51,7 @@ and ImportLOF.cpp.
 #include "../Project.h"
 
 #include "ImportPCM.h"
+#include "ImportDSPADPCM.h"
 #include "ImportMP3.h"
 #include "ImportOGG.h"
 #include "ImportQT.h"
@@ -91,6 +92,7 @@ bool Importer::Initialize()
    // order is significant.  If none match, they will all be tried
    // in the order defined here.
    GetPCMImportPlugin(mImportPluginList, mUnusableImportPluginList);
+   GetDSPADPCMImportPlugin(mImportPluginList, mUnusableImportPluginList);
    GetOGGImportPlugin(mImportPluginList, mUnusableImportPluginList);
    GetFLACImportPlugin(mImportPluginList, mUnusableImportPluginList);
    GetMP3ImportPlugin(mImportPluginList, mUnusableImportPluginList);
